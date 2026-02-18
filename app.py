@@ -49,7 +49,7 @@ with st.form("maintenance_form", clear_on_submit=True):
                 try:
                     # Simpan ke Storage Bucket
                     supabase.storage.from_("foto_maintenance").upload(nama_file, foto_ambil.getvalue())
-url_foto_final = supabase.storage.from_("foto_maintenance").get_public_url(nama_file)
+                    url_foto_final = supabase.storage.from_("foto_maintenance").get_public_url(nama_file)
                 except Exception as e:
                     st.error(f"Gagal upload foto: {e}")
 
