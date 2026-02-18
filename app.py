@@ -10,55 +10,66 @@ URL = st.secrets["SUPABASE_URL"]
 KEY = st.secrets["SUPABASE_KEY"]
 supabase: Client = create_client(URL, KEY)
 
-# --- FUNGSI GENERATOR PDF (VERSI FIX BYTES) ---
+# --- FUNGSI GENERATOR PDF (VERSI RAPI & SIMETRIS) ---
 def generate_pdf_simantap(df, tgl):
     pdf = FPDF(orientation='P', unit='mm', format='A4')
     pdf.add_page()
     
-    # Header
+    # Header Judul
     pdf.set_font("Arial", "B", 14)
-    pdf.cell(190, 7, "CHECKLIST HARIAN TEKNISI ME", ln=True, align="C")
+    pdf.cell(0, 7, "CHECKLIST HARIAN TEKNISI ME", ln=True, align="C")
     pdf.set_font("Arial", "B", 12)
-    pdf.cell(190, 7, "KPwBI BALIKPAPAN (SIMANTAP)", ln=True, align="C")
+    pdf.cell(0, 7, "KPwBI BALIKPAPAN (SIMANTAP)", ln=True, align="C")
     pdf.set_font("Arial", "", 10)
-    pdf.cell(190, 7, f"Tanggal Laporan: {tgl}", ln=True, align="C")
+    pdf.cell(0, 7, f"Tanggal Laporan: {tgl}", ln=True, align="C")
     pdf.ln(5)
     pdf.line(10, 32, 200, 32) 
-    pdf.ln(5)
+    pdf.ln(8)
 
-    # Table Header
-    pdf.set_font("Arial", "B", 8)
+    # Table Header (Total Lebar 190mm)
+    pdf.set_font("Arial", "B", 9)
     pdf.set_fill_color(230, 230, 230)
-    pdf.cell(35, 8, "Nama Aset", border=1, fill=True)
-    pdf.cell(20, 8, "Teknisi", border=1, fill=True)
-    pdf.cell(15, 8, "Kondisi", border=1, fill=True)
-    pdf.cell(120, 8, "Detail Checklist (V = OK / Normal)", border=1, fill=True, ln=True)
+    pdf.cell(45, 10, "Nama Aset", border=1, fill=True, align="C")
+    pdf.cell(25, 10, "Teknisi", border=1, fill=True, align="C")
+    pdf.cell(30, 10, "Kondisi", border=1, fill=True, align="C")
+    pdf.cell(90, 10, "Detail Checklist (V = OK)", border=1, fill=True, align="C", ln=True)
 
     # Table Body
-    pdf.set_font("Arial", "", 7)
+    pdf.set_font("Arial", "", 8)
     for _, row in df.iterrows():
+        # Hitung tinggi baris berdasarkan teks terpanjang (multi_cell)
         exclude = ['Nama Aset', 'teknisi', 'kondisi', 'keterangan', 'Tanggal']
         params = [f"{k}" for k, v in row.items() if k not in exclude and v == "v"]
-        param_text = ", ".join(params)
-
-        pdf.cell(35, 8, str(row['Nama Aset']), border=1)
-        pdf.cell(20, 8, str(row['teknisi']), border=1)
-        pdf.cell(15, 8, str(row['kondisi']), border=1)
-        pdf.multi_cell(120, 8, param_text if param_text else "-", border=1)
-
-    # Tanda Tangan
-    pdf.ln(15)
+        param_text = ", ".join(params) if params else "-"
+        
+        # Simpan koordinat awal
+        x = pdf.get_x()
+        y = pdf.get_y()
+        
+        # Baris data dengan tinggi fleksibel
+        pdf.cell(45, 10, str(row['Nama Aset'])[:25], border=1)
+        pdf.cell(25, 10, str(row['teknisi']), border=1, align="C")
+        pdf.cell(30, 10, str(row['kondisi']), border=1, align="C")
+        
+        # Kolom Detail menggunakan MultiCell agar tidak keluar garis
+        pdf.multi_cell(90, 10, param_text, border=1, align="L")
+        
+    # Area Tanda Tangan (Pindah ke bawah kertas)
+    pdf.set_y(-50) # Set posisi 5cm dari bawah
     pdf.set_font("Arial", "", 10)
-    pdf.cell(95, 5, "Disetujui Oleh,", ln=0, align="C")
-    pdf.cell(95, 5, "Dibuat Oleh,", ln=1, align="C")
-    pdf.cell(95, 5, "Supervisor / SGS", ln=0, align="C")
-    pdf.cell(95, 5, "Teknisi ME", ln=1, align="C")
-    pdf.ln(15)
-    pdf.cell(95, 5, "( ................................... )", ln=0, align="C")
+    
+    # Kolom Tanda Tangan
+    pdf.cell(95, 5, "Disetujui Oleh,", 0, 0, "C")
+    pdf.cell(95, 5, "Dibuat Oleh,", 0, 1, "C")
+    pdf.cell(95, 5, "Supervisor / SGS", 0, 0, "C")
+    pdf.cell(95, 5, "Teknisi ME", 0, 1, "C")
+    
+    pdf.ln(15) # Ruang tanda tangan
+    
+    pdf.cell(95, 5, "( ................................... )", 0, 0, "C")
     nama_teknisi = df['teknisi'].iloc[0] if not df.empty else "........"
-    pdf.cell(95, 5, f"( {nama_teknisi} )", ln=1, align="C")
+    pdf.cell(95, 5, f"( {nama_teknisi} )", 0, 1, "C")
 
-    # Kembalikan sebagai bytes biner
     return bytes(pdf.output())
 
 # --- TAMPILAN JUDUL APLIKASI ---
