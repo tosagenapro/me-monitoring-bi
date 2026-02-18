@@ -184,10 +184,10 @@ with tab3:
                     st.warning("Mohon isi nama teknisi dan tindakan.")
 
 # ==========================================
-# TAB 4: DASHBOARD & EXPORT (SAPU JAGAT)
+# TAB 4: DASHBOARD & EXPORT (DATA LEGAL)
 # ==========================================
 with tab4:
-    st.subheader("📊 Laporan Harian Terpadu")
+    st.subheader("📊 Penarikan Laporan Harian")
     
     raw_logs = get_all_maintenance_logs()
     
@@ -196,55 +196,60 @@ with tab4:
         df['Nama Aset'] = df['assets'].apply(lambda x: x['nama_aset'] if x else "N/A")
         df['Tanggal'] = pd.to_datetime(df['created_at']).dt.date
         
-        # --- UI FILTER HARIAN ---
-        st.write("### 🔍 Pilih Rentang Laporan")
-        col_f1, col_f2 = st.columns(2)
-        with col_f1:
-            d_pilih = st.date_input("Pilih Tanggal Pekerjaan", datetime.date.today())
-        
-        # Filter data berdasarkan tanggal yang dipilih
+        # Filter Tanggal
+        d_pilih = st.date_input("Pilih Tanggal Laporan", datetime.date.today())
         df_filtered = df[df['Tanggal'] == d_pilih].copy()
 
         if not df_filtered.empty:
-            # 1. Bongkar checklist_data menjadi kolom-kolom
+            # 1. Bongkar checklist_data
             checklist_df = pd.json_normalize(df_filtered['checklist_data'])
             
-            # 2. Gabungkan data Identitas + Checklist
-            df_sapu_jagat = pd.concat([
+            # 2. Gabungkan data Utama + Checklist
+            df_final = pd.concat([
                 df_filtered[['Nama Aset', 'teknisi', 'kondisi', 'keterangan']].reset_index(drop=True),
                 checklist_df.reset_index(drop=True)
             ], axis=1)
 
-            # 3. PROSES PERAMPINGAN (Magic Centang)
-            # Semua jawaban positif kita ubah jadi "V" agar kolomnya ramping
-            kata_kunci_positif = [
-                "Sudah", "Normal", "Baik", "Lancar", "Bersih", 
-                "Ya", "Berfungsi Baik", "Lengkap/Baik", "OK"
+            # 3. Proses Simbol Centang (V) agar ramping
+            kata_kunci = ["Sudah", "Normal", "Baik", "Lancar", "Bersih", "Ya", "Berfungsi Baik", "Lengkap/Baik", "OK"]
+            for kata in kata_kunci:
+                df_final = df_final.replace(kata, "v")
+            df_final = df_final.fillna("-")
+
+            # Preview data di layar (tetap simpel tanpa hiasan dulu)
+            st.write(f"Preview data tanggal: {d_pilih}")
+            st.dataframe(df_final, use_container_width=True)
+
+            # --- LOGIKA PENAMBAHAN AREA TANDA TANGAN DI HASIL EXPORT ---
+            # Menambah baris kosong untuk jarak
+            blank_row = pd.DataFrame([[None] * len(df_final.columns)], columns=df_final.columns)
+            
+            # Membuat Footer Tanda Tangan
+            footer_content = [
+                ["", "", "", ""], # Baris kosong 1
+                ["Disetujui Oleh,", "", "Dibuat Oleh,", ""], # Judul TTD
+                ["Supervisor/SGS", "", "Teknisi ME", ""], # Jabatan
+                ["", "", "", ""], # Baris kosong 2 (untuk tempat TTD)
+                ["( ...................... )", "", f"( {df_final['teknisi'].iloc[0] if not df_final.empty else '........'} )", ""] # Nama terang
             ]
             
-            # Ganti semua kata di atas menjadi "V"
-            for kata in kata_kunci_positif:
-                df_sapu_jagat = df_sapu_jagat.replace(kata, "V")
-            
-            # Ganti nilai yang kosong/NaN dengan strip (-) agar tidak terlihat bolong berantakan
-            df_sapu_jagat = df_sapu_jagat.fillna("-")
+            # Konversi footer ke DataFrame agar bisa digabung
+            df_footer = pd.DataFrame(footer_content, columns=df_final.columns[:4].tolist() + df_final.columns[4:].tolist()[:len(footer_content[0])-4])
 
-            st.write("---")
-            st.write(f"### 📋 Preview Laporan Harian: {d_pilih}")
+            # Gabung semua: Data + Jarak + Tanda Tangan
+            df_to_download = pd.concat([df_final, blank_row, df_footer], axis=0, ignore_index=True)
+
+            # Siapkan Header Teks untuk CSV
+            header_text = f"CHECKLIST HARIAN TEKNISI ME KPwBI BALIKPAPAN\nTanggal Pekerjaan: {d_pilih}\n\n"
+            csv_body = df_to_download.to_csv(index=False)
             
-            # Tampilkan tabel di Streamlit
-            st.dataframe(df_sapu_jagat, use_container_width=True)
-            
-            # 4. DOWNLOAD CSV
-            csv_jagat = df_sapu_jagat.to_csv(index=False).encode('utf-8')
             st.download_button(
-                label="📥 Download Laporan Sapu Jagat (CSV)",
-                data=csv_jagat,
-                file_name=f"Laporan_Harian_ME_{d_pilih}.csv",
-                mime='text/csv',
-                key="btn_jagat"
+                label="📥 Download Laporan (CSV)",
+                data=header_text + csv_body,
+                file_name=f"Laporan_ME_BI_BPN_{d_pilih}.csv",
+                mime='text/csv'
             )
         else:
-            st.warning(f"Tidak ada aktivitas teknisi pada tanggal {d_pilih}")
+            st.warning(f"Tidak ada data aktivitas pada {d_pilih}")
     else:
         st.info("Belum ada data di database.")
