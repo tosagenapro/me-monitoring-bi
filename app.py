@@ -184,10 +184,10 @@ with tab3:
                     st.warning("Mohon isi nama teknisi dan tindakan.")
 
 # ==========================================
-# TAB 4: DASHBOARD & EXPORT (VERSI RAPI)
+# TAB 4: DASHBOARD & EXPORT (SAPU JAGAT)
 # ==========================================
 with tab4:
-    st.subheader("📊 Monitoring & Download Laporan")
+    st.subheader("📊 Laporan Harian Terpadu")
     
     raw_logs = get_all_maintenance_logs()
     
@@ -196,57 +196,55 @@ with tab4:
         df['Nama Aset'] = df['assets'].apply(lambda x: x['nama_aset'] if x else "N/A")
         df['Tanggal'] = pd.to_datetime(df['created_at']).dt.date
         
-        st.write("### 🔍 Filter Data")
+        # --- UI FILTER HARIAN ---
+        st.write("### 🔍 Pilih Rentang Laporan")
         col_f1, col_f2 = st.columns(2)
         with col_f1:
-            d_mulai = st.date_input("Mulai Tanggal", datetime.date.today() - datetime.timedelta(days=7), key="filter_start")
-        with col_f2:
-            d_selesai = st.date_input("Sampai Tanggal", datetime.date.today(), key="filter_end")
-            
-        list_aset = sorted(df['Nama Aset'].unique())
-        pilih_aset = st.multiselect("Pilih Unit Aset (Kosongkan untuk Semua)", list_aset, key="filter_aset")
+            d_pilih = st.date_input("Pilih Tanggal Pekerjaan", datetime.date.today())
         
-        # Logika Filter
-        mask = (df['Tanggal'] >= d_mulai) & (df['Tanggal'] <= d_selesai)
-        if pilih_aset:
-            mask = mask & (df['Nama Aset'].isin(pilih_aset))
-        
-        df_filtered = df.loc[mask].copy()
-        
+        # Filter data berdasarkan tanggal yang dipilih
+        df_filtered = df[df['Tanggal'] == d_pilih].copy()
+
         if not df_filtered.empty:
-            # --- PROSES MERAPIKAN DATA (DARI SINI KODE BARUNYA) ---
-            df_export = df_filtered.copy()
+            # 1. Bongkar checklist_data menjadi kolom-kolom
+            checklist_df = pd.json_normalize(df_filtered['checklist_data'])
             
-            # Pecah kolom checklist_data yang tadinya satu kolom menjadi banyak kolom
-            checklist_df = pd.json_normalize(df_export['checklist_data'])
-            
-            # Gabungkan data identitas dengan data hasil checklist
-            df_final_export = pd.concat([
-                df_export[['Tanggal', 'Nama Aset', 'teknisi', 'kondisi', 'keterangan']].reset_index(drop=True),
+            # 2. Gabungkan data Identitas + Checklist
+            df_sapu_jagat = pd.concat([
+                df_filtered[['Nama Aset', 'teknisi', 'kondisi', 'keterangan']].reset_index(drop=True),
                 checklist_df.reset_index(drop=True)
             ], axis=1)
 
-            # Ganti kata-kata standar menjadi simbol centang agar lebih bersih dilihat
-            df_final_export = df_final_export.replace({
-                "Sudah": "V", "Normal": "V", "Baik": "V", 
-                "Lancar": "V", "Bersih": "V", "Ya": "V", "Berfungsi Baik": "V"
-            })
+            # 3. PROSES PERAMPINGAN (Magic Centang)
+            # Semua jawaban positif kita ubah jadi "V" agar kolomnya ramping
+            kata_kunci_positif = [
+                "Sudah", "Normal", "Baik", "Lancar", "Bersih", 
+                "Ya", "Berfungsi Baik", "Lengkap/Baik", "OK"
+            ]
+            
+            # Ganti semua kata di atas menjadi "V"
+            for kata in kata_kunci_positif:
+                df_sapu_jagat = df_sapu_jagat.replace(kata, "V")
+            
+            # Ganti nilai yang kosong/NaN dengan strip (-) agar tidak terlihat bolong berantakan
+            df_sapu_jagat = df_sapu_jagat.fillna("-")
 
             st.write("---")
-            st.write("### 📋 Preview Laporan Siap Cetak")
-            # Tampilkan tabel yang sudah rapi di aplikasi
-            st.dataframe(df_final_export, use_container_width=True)
+            st.write(f"### 📋 Preview Laporan Harian: {d_pilih}")
             
-            # Tombol Download data yang sudah rapi
-            csv_ready = df_final_export.to_csv(index=False).encode('utf-8')
+            # Tampilkan tabel di Streamlit
+            st.dataframe(df_sapu_jagat, use_container_width=True)
+            
+            # 4. DOWNLOAD CSV
+            csv_jagat = df_sapu_jagat.to_csv(index=False).encode('utf-8')
             st.download_button(
-                label="📥 Download Laporan Profesional (CSV)",
-                data=csv_ready,
-                file_name=f"Laporan_ME_Profesional_{d_mulai}_sd_{d_selesai}.csv",
+                label="📥 Download Laporan Sapu Jagat (CSV)",
+                data=csv_jagat,
+                file_name=f"Laporan_Harian_ME_{d_pilih}.csv",
                 mime='text/csv',
-                key="btn_download_rapi"
+                key="btn_jagat"
             )
         else:
-            st.warning("Tidak ada data pada rentang tanggal/aset tersebut.")
+            st.warning(f"Tidak ada aktivitas teknisi pada tanggal {d_pilih}")
     else:
-        st.info("Belum ada data laporan rutin yang tersimpan.")
+        st.info("Belum ada data di database.")
