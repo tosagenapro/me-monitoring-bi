@@ -9,7 +9,11 @@ URL = st.secrets["SUPABASE_URL"]
 KEY = st.secrets["SUPABASE_KEY"]
 supabase: Client = create_client(URL, KEY)
 
-st.title("🏢 Monitoring ME - BI Balikpapan")
+# --- TAMPILAN JUDUL APLIKASI ---
+st.title("🚀 SIMANTAP BI BPP")
+st.markdown("### Sistem Informasi Monitoring dan Aplikasi Pemeliharaan ME")
+st.markdown("##### KPwBI Balikpapan")
+st.write("---")
 
 # --- FUNGSI AMBIL DATA ---
 def get_assets():
