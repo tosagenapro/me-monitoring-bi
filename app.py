@@ -184,7 +184,7 @@ with tab3:
                     st.warning("Mohon isi nama teknisi dan tindakan.")
 
 # ==========================================
-# TAB 4: DASHBOARD & EXPORT (Penyempurnaan)
+# TAB 4: DASHBOARD & EXPORT (VERSI RAPI)
 # ==========================================
 with tab4:
     st.subheader("📊 Monitoring & Download Laporan")
@@ -193,20 +193,18 @@ with tab4:
     
     if raw_logs:
         df = pd.DataFrame(raw_logs)
-        # Ambil nama aset dari kolom relasi assets
         df['Nama Aset'] = df['assets'].apply(lambda x: x['nama_aset'] if x else "N/A")
         df['Tanggal'] = pd.to_datetime(df['created_at']).dt.date
         
-        # --- UI FILTER ---
         st.write("### 🔍 Filter Data")
         col_f1, col_f2 = st.columns(2)
         with col_f1:
-            d_mulai = st.date_input("Mulai Tanggal", datetime.date.today() - datetime.timedelta(days=7))
+            d_mulai = st.date_input("Mulai Tanggal", datetime.date.today() - datetime.timedelta(days=7), key="filter_start")
         with col_f2:
-            d_selesai = st.date_input("Sampai Tanggal", datetime.date.today())
+            d_selesai = st.date_input("Sampai Tanggal", datetime.date.today(), key="filter_end")
             
         list_aset = sorted(df['Nama Aset'].unique())
-        pilih_aset = st.multiselect("Pilih Unit Aset (Kosongkan untuk Semua)", list_aset)
+        pilih_aset = st.multiselect("Pilih Unit Aset (Kosongkan untuk Semua)", list_aset, key="filter_aset")
         
         # Logika Filter
         mask = (df['Tanggal'] >= d_mulai) & (df['Tanggal'] <= d_selesai)
@@ -215,24 +213,40 @@ with tab4:
         
         df_filtered = df.loc[mask].copy()
         
-        # Tampilkan Statistik Singkat
-        st.write("---")
-        c1, c2, c3 = st.columns(3)
-        c1.metric("Jumlah Laporan", len(df_filtered))
-        c2.metric("Kondisi Baik", len(df_filtered[df_filtered['kondisi'].isin(['Sangat Baik', 'Baik'])]))
-        c3.metric("Perlu Cek", len(df_filtered[df_filtered['kondisi'].isin(['Perlu Perbaikan', 'Rusak'])]))
-        
-        # Preview Tabel
-        st.write("### 📋 Preview Data")
-        st.dataframe(df_filtered[['Tanggal', 'Nama Aset', 'teknisi', 'kondisi', 'keterangan', 'checklist_data']], use_container_width=True)
-        
-        # Tombol Download
-        csv = df_filtered[['Tanggal', 'Nama Aset', 'teknisi', 'kondisi', 'keterangan', 'checklist_data']].to_csv(index=False).encode('utf-8')
-        st.download_button(
-            label="📥 Download Hasil Filter ke Excel (CSV)",
-            data=csv,
-            file_name=f"Laporan_ME_BI_{d_mulai}_sd_{d_selesai}.csv",
-            mime='text/csv',
-        )
+        if not df_filtered.empty:
+            # --- PROSES MERAPIKAN DATA (DARI SINI KODE BARUNYA) ---
+            df_export = df_filtered.copy()
+            
+            # Pecah kolom checklist_data yang tadinya satu kolom menjadi banyak kolom
+            checklist_df = pd.json_normalize(df_export['checklist_data'])
+            
+            # Gabungkan data identitas dengan data hasil checklist
+            df_final_export = pd.concat([
+                df_export[['Tanggal', 'Nama Aset', 'teknisi', 'kondisi', 'keterangan']].reset_index(drop=True),
+                checklist_df.reset_index(drop=True)
+            ], axis=1)
+
+            # Ganti kata-kata standar menjadi simbol centang agar lebih bersih dilihat
+            df_final_export = df_final_export.replace({
+                "Sudah": "V", "Normal": "V", "Baik": "V", 
+                "Lancar": "V", "Bersih": "V", "Ya": "V", "Berfungsi Baik": "V"
+            })
+
+            st.write("---")
+            st.write("### 📋 Preview Laporan Siap Cetak")
+            # Tampilkan tabel yang sudah rapi di aplikasi
+            st.dataframe(df_final_export, use_container_width=True)
+            
+            # Tombol Download data yang sudah rapi
+            csv_ready = df_final_export.to_csv(index=False).encode('utf-8')
+            st.download_button(
+                label="📥 Download Laporan Profesional (CSV)",
+                data=csv_ready,
+                file_name=f"Laporan_ME_Profesional_{d_mulai}_sd_{d_selesai}.csv",
+                mime='text/csv',
+                key="btn_download_rapi"
+            )
+        else:
+            st.warning("Tidak ada data pada rentang tanggal/aset tersebut.")
     else:
         st.info("Belum ada data laporan rutin yang tersimpan.")
