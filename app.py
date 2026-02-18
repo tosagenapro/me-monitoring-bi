@@ -1,6 +1,7 @@
 import streamlit as st
 from supabase import create_client, Client
 import datetime
+import pandas as pd
 
 # --- CONFIG & KONEKSI ---
 st.set_page_config(page_title="ME Monitoring BI", layout="wide")
@@ -16,8 +17,12 @@ def get_assets():
     return query.data
 
 def get_open_issues():
-    # Mengambil laporan gangguan yang statusnya BUKAN 'Resolved'
     query = supabase.table("gangguan_logs").select("*, assets(nama_aset, kode_qr)").neq("status", "Resolved").execute()
+    return query.data
+
+def get_all_maintenance_logs():
+    # Mengambil semua data untuk keperluan dashboard/export
+    query = supabase.table("maintenance_logs").select("*, assets(nama_aset, kode_qr)").order("created_at", desc=True).execute()
     return query.data
 
 # --- FUNGSI CHECKLIST SOW LENGKAP (Module 1) ---
@@ -72,8 +77,8 @@ def render_sow_checklist(nama_unit):
 asset_data = get_assets()
 options = {f"{a['kode_qr']} - {a['nama_aset']}": a for a in asset_data}
 
-# --- SISTEM TAB (PEMISAH FITUR) ---
-tab1, tab2, tab3 = st.tabs(["📋 Checklist Rutin", "⚠️ Lapor Gangguan", "✅ Update Perbaikan"])
+# --- SISTEM TAB ---
+tab1, tab2, tab3, tab4 = st.tabs(["📋 Checklist Rutin", "⚠️ Lapor Gangguan", "✅ Update Perbaikan", "📊 Dashboard & Export"])
 
 # ==========================================
 # TAB 1: MAINTENANCE RUTIN (SOW)
@@ -111,7 +116,7 @@ with tab1:
                 st.error("Nama Teknisi wajib diisi!")
 
 # ==========================================
-# TAB 2: LAPOR GANGGUAN (Module 2)
+# TAB 2: LAPOR GANGGUAN
 # ==========================================
 with tab2:
     st.warning("Hanya untuk laporan kerusakan mendadak!")
@@ -143,16 +148,14 @@ with tab2:
                 st.warning("Nama dan Detail Masalah wajib diisi!")
 
 # ==========================================
-# TAB 3: UPDATE PERBAIKAN (Kronologi)
+# TAB 3: UPDATE PERBAIKAN
 # ==========================================
 with tab3:
     st.subheader("Penyelesaian Laporan Kerusakan")
     issues = get_open_issues()
-    
     if not issues:
         st.info("Alhamdulillah, semua aset dalam kondisi aman.")
     else:
-        # Menampilkan daftar yang statusnya masih 'Open'
         issue_options = {f"[{i['urgensi']}] {i['assets']['nama_aset']} - {i['masalah'][:30]}...": i for i in issues}
         sel_issue_label = st.selectbox("Pilih Laporan yang sudah Selesai diperbaiki", options=list(issue_options.keys()))
         issue_data = issue_options[sel_issue_label]
@@ -171,14 +174,65 @@ with tab3:
                         url_a = supabase.storage.from_("foto_maintenance").get_public_url(fn_a)
                     
                     supabase.table("gangguan_logs").update({
-                        "status": "Resolved",
-                        "tindakan_perbaikan": tindakan_p,
-                        "teknisi_perbaikan": t_perbaikan,
-                        "tgl_perbaikan": datetime.datetime.now().isoformat(),
-                        "foto_setelah_perbaikan_url": url_a
+                        "status": "Resolved", "tindakan_perbaikan": tindakan_p,
+                        "teknisi_perbaikan": t_perbaikan, "tgl_perbaikan": datetime.datetime.now().isoformat(),
+                        "foto_setelah_perbaikan_url": url_after
                     }).eq("id", issue_data['id']).execute()
-                    
                     st.success("Data kronologi tersimpan. Status Aset kembali Normal!")
                     st.balloons()
                 else:
                     st.warning("Mohon isi nama teknisi dan tindakan.")
+
+# ==========================================
+# TAB 4: DASHBOARD & EXPORT (Penyempurnaan)
+# ==========================================
+with tab4:
+    st.subheader("📊 Monitoring & Download Laporan")
+    
+    raw_logs = get_all_maintenance_logs()
+    
+    if raw_logs:
+        df = pd.DataFrame(raw_logs)
+        # Ambil nama aset dari kolom relasi assets
+        df['Nama Aset'] = df['assets'].apply(lambda x: x['nama_aset'] if x else "N/A")
+        df['Tanggal'] = pd.to_datetime(df['created_at']).dt.date
+        
+        # --- UI FILTER ---
+        st.write("### 🔍 Filter Data")
+        col_f1, col_f2 = st.columns(2)
+        with col_f1:
+            d_mulai = st.date_input("Mulai Tanggal", datetime.date.today() - datetime.timedelta(days=7))
+        with col_f2:
+            d_selesai = st.date_input("Sampai Tanggal", datetime.date.today())
+            
+        list_aset = sorted(df['Nama Aset'].unique())
+        pilih_aset = st.multiselect("Pilih Unit Aset (Kosongkan untuk Semua)", list_aset)
+        
+        # Logika Filter
+        mask = (df['Tanggal'] >= d_mulai) & (df['Tanggal'] <= d_selesai)
+        if pilih_aset:
+            mask = mask & (df['Nama Aset'].isin(pilih_aset))
+        
+        df_filtered = df.loc[mask].copy()
+        
+        # Tampilkan Statistik Singkat
+        st.write("---")
+        c1, c2, c3 = st.columns(3)
+        c1.metric("Jumlah Laporan", len(df_filtered))
+        c2.metric("Kondisi Baik", len(df_filtered[df_filtered['kondisi'].isin(['Sangat Baik', 'Baik'])]))
+        c3.metric("Perlu Cek", len(df_filtered[df_filtered['kondisi'].isin(['Perlu Perbaikan', 'Rusak'])]))
+        
+        # Preview Tabel
+        st.write("### 📋 Preview Data")
+        st.dataframe(df_filtered[['Tanggal', 'Nama Aset', 'teknisi', 'kondisi', 'keterangan', 'checklist_data']], use_container_width=True)
+        
+        # Tombol Download
+        csv = df_filtered[['Tanggal', 'Nama Aset', 'teknisi', 'kondisi', 'keterangan', 'checklist_data']].to_csv(index=False).encode('utf-8')
+        st.download_button(
+            label="📥 Download Hasil Filter ke Excel (CSV)",
+            data=csv,
+            file_name=f"Laporan_ME_BI_{d_mulai}_sd_{d_selesai}.csv",
+            mime='text/csv',
+        )
+    else:
+        st.info("Belum ada data laporan rutin yang tersimpan.")
