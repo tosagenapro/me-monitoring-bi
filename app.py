@@ -80,16 +80,21 @@ def render_sow_checklist(nama_unit):
 
 # --- FORM INPUT ---
 asset_data = get_assets()
-# Gabungkan Kode QR dan Nama Aset untuk label dropdown
+# Membuat daftar pilihan: "KodeQR - NamaAset"
 options = {f"{a['kode_qr']} - {a['nama_aset']}": a for a in asset_data}
 
 with st.form("form_maintenance", clear_on_submit=True):
-    selected_label = st.selectbox("1. Pilih Aset (Berdasarkan Kode QR)", options=list(options.keys()))
-    selected_asset = options[selected_label]
+    # 'key' di sini sangat penting agar form merespon saat aset diganti
+    selected_label = st.selectbox(
+        "1. Pilih Aset (Berdasarkan Kode QR)", 
+        options=list(options.keys()),
+        key="pilihan_aset_aktif" 
+    )
     
+    selected_asset = options[selected_label]
     nama_teknisi = st.text_input("2. Nama Teknisi")
     
-    # Render parameter SOW berdasarkan aset yang dipilih
+    # RUMUS PENTING: Mengambil checklist sesuai nama aset yang dipilih di atas
     checklist_results = render_sow_checklist(selected_asset['nama_aset'])
     
     st.write("---")
@@ -104,21 +109,26 @@ with st.form("form_maintenance", clear_on_submit=True):
         if nama_teknisi:
             url_foto = None
             if foto:
+                # Proses upload foto ke storage
                 fn = f"SOW_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}.jpg"
                 supabase.storage.from_("foto_maintenance").upload(fn, foto.getvalue())
                 url_foto = supabase.storage.from_("foto_maintenance").get_public_url(fn)
             
+            # Data yang akan dikirim ke Supabase
             payload = {
                 "asset_id": selected_asset['id'],
                 "teknisi": nama_teknisi,
                 "kondisi": kondisi_final,
                 "keterangan": tindakan,
                 "foto_url": url_foto,
-                "checklist_data": checklist_results
+                "checklist_data": checklist_results # Data teknis masuk ke sini
             }
             
-            supabase.table("maintenance_logs").insert(payload).execute()
-            st.success(f"Laporan {selected_label} Berhasil Disimpan!")
-            st.balloons()
+            try:
+                supabase.table("maintenance_logs").insert(payload).execute()
+                st.success(f"Laporan {selected_label} Berhasil Disimpan!")
+                st.balloons()
+            except Exception as e:
+                st.error(f"Gagal simpan: {e}")
         else:
             st.error("Nama Teknisi tidak boleh kosong!")
