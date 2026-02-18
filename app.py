@@ -78,23 +78,22 @@ def render_sow_checklist(nama_unit):
         
     return ck
 
-# --- FORM INPUT ---
+# --- AREA PEMILIHAN ASET (DI LUAR FORM AGAR RESPONSIF) ---
 asset_data = get_assets()
-# Membuat daftar pilihan: "KodeQR - NamaAset"
 options = {f"{a['kode_qr']} - {a['nama_aset']}": a for a in asset_data}
 
+# Dropdown diletakkan di luar st.form agar aplikasi langsung refresh saat pilihan diganti
+selected_label = st.selectbox(
+    "1. Pilih Aset (Berdasarkan Kode QR)", 
+    options=list(options.keys())
+)
+selected_asset = options[selected_label]
+
+# --- FORM INPUT (UNTUK PENGISIAN DATA) ---
 with st.form("form_maintenance", clear_on_submit=True):
-    # 'key' di sini sangat penting agar form merespon saat aset diganti
-    selected_label = st.selectbox(
-        "1. Pilih Aset (Berdasarkan Kode QR)", 
-        options=list(options.keys()),
-        key="pilihan_aset_aktif" 
-    )
-    
-    selected_asset = options[selected_label]
     nama_teknisi = st.text_input("2. Nama Teknisi")
     
-    # RUMUS PENTING: Mengambil checklist sesuai nama aset yang dipilih di atas
+    # SEKARANG CHECKLIST AKAN BERUBAH OTOMATIS SESUAI PILIHAN DI ATAS
     checklist_results = render_sow_checklist(selected_asset['nama_aset'])
     
     st.write("---")
@@ -103,32 +102,30 @@ with st.form("form_maintenance", clear_on_submit=True):
     
     foto = st.camera_input("5. Ambil Foto Bukti")
     
-    submit = st.form_submit_button("Kirim Laporan SOW")
+    submit = st.form_submit_button("Simpan Laporan SOW")
 
     if submit:
         if nama_teknisi:
             url_foto = None
             if foto:
-                # Proses upload foto ke storage
                 fn = f"SOW_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}.jpg"
                 supabase.storage.from_("foto_maintenance").upload(fn, foto.getvalue())
                 url_foto = supabase.storage.from_("foto_maintenance").get_public_url(fn)
             
-            # Data yang akan dikirim ke Supabase
             payload = {
                 "asset_id": selected_asset['id'],
                 "teknisi": nama_teknisi,
                 "kondisi": kondisi_final,
                 "keterangan": tindakan,
                 "foto_url": url_foto,
-                "checklist_data": checklist_results # Data teknis masuk ke sini
+                "checklist_data": checklist_results
             }
             
             try:
                 supabase.table("maintenance_logs").insert(payload).execute()
-                st.success(f"Laporan {selected_label} Berhasil Disimpan!")
+                st.success(f"Berhasil! Laporan {selected_label} tersimpan.")
                 st.balloons()
             except Exception as e:
                 st.error(f"Gagal simpan: {e}")
         else:
-            st.error("Nama Teknisi tidak boleh kosong!")
+            st.error("Nama Teknisi wajib diisi!")
