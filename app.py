@@ -3,84 +3,123 @@ from supabase import create_client, Client
 import datetime
 
 # --- CONFIG & KONEKSI ---
-st.set_page_config(page_title="ME Monitoring BI", layout="centered")
+st.set_page_config(page_title="ME Monitoring BI", layout="wide")
 URL = st.secrets["SUPABASE_URL"]
 KEY = st.secrets["SUPABASE_KEY"]
 supabase: Client = create_client(URL, KEY)
 
 st.title("🏢 Monitoring ME - BI Balikpapan")
 
-# --- FUNGSI DATA ---
+# --- FUNGSI AMBIL DATA ---
 def get_assets():
     query = supabase.table("assets").select("id, nama_aset, kategori, kode_qr").order("nama_aset").execute()
     return query.data
 
-# --- FUNGSI CHECKLIST SOW (MODULE 1) ---
+def get_open_issues():
+    # Ambil laporan gangguan yang statusnya belum 'Resolved'
+    query = supabase.table("gangguan_logs").select("*, assets(nama_aset, kode_qr)").neq("status", "Resolved").execute()
+    return query.data
+
+# --- FUNGSI CHECKLIST SOW ---
 def render_sow_checklist(nama_unit):
     st.info(f"📋 Parameter SOW: {nama_unit}")
     ck = {}
     if "Chiller" in nama_unit:
-        ck['Listrik'] = st.radio("Sistem Kelistrikan Chiller", ["Normal", "Abnormal"])
-        ck['Kondensor'] = st.radio("Pembersihan Sirip Kondensor", ["Sudah", "Belum"])
-        ck['Arus_Ampere'] = st.text_input("Arus Kompresor & Fan (Ampere)")
-        # ... (Parameter lain tetap ada di memori kode)
+        ck['Listrik'] = st.radio("Sistem Kelistrikan", ["Normal", "Abnormal"])
+        ck['Arus_Ampere'] = st.text_input("Arus Kompresor (Ampere)")
     elif "AHU" in nama_unit:
-        ck['Cuci_Filter'] = st.radio("Pencucian Filter Udara", ["Sudah", "Belum"])
-        ck['Thermostat'] = st.radio("Thermostat ON/OFF", ["Normal", "Rusak"])
-        ck['Temp_Air'] = st.text_input("Temperatur Air In/Out (°C)")
-    elif "AC" in nama_unit:
-        ck['Filter_Evap'] = st.radio("Filter & Evaporator", ["Bersih", "Kotor"])
-        ck['Drainase'] = st.radio("Saluran Drainase", ["Lancar", "Tersumbat"])
+        ck['Filter'] = st.radio("Kebersihan Filter", ["Bersih", "Kotor"])
+        ck['Temp'] = st.text_input("Suhu Udara Keluar (°C)")
     elif "Genset" in nama_unit:
-        ck['Accu'] = st.radio("Kondisi Accu & Air Accu", ["Baik", "Perlu Maintenance"])
-        ck['Radiator'] = st.radio("Kondisi Radiator", ["Bersih/Cukup", "Kotor/Kurang"])
-    elif "UPS" in nama_unit:
-        ck['Display'] = st.radio("Pemeriksaan Display", ["Normal", "Error/Alarm"])
-        ck['Batt_Volt'] = st.text_input("Tegangan Baterai (VDC)")
+        ck['Accu'] = st.radio("Kondisi Accu", ["Baik", "Maintenance"])
+        ck['Solar'] = st.text_input("Level Bahan Bakar (%)")
     else:
-        ck['Catatan'] = st.text_area("Detail Pengecekan Umum")
+        ck['Kondisi'] = st.radio("Status Unit", ["Normal", "Pengecekan"])
     return ck
 
-# --- PREPARASI DATA ASET ---
+# --- PREPARASI ---
 asset_data = get_assets()
 options = {f"{a['kode_qr']} - {a['nama_aset']}": a for a in asset_data}
 
-# --- SISTEM TAB (PEMISAH MODULE) ---
-tab1, tab2 = st.tabs(["📋 Checklist Rutin (SOW)", "⚠️ Lapor Gangguan (Emergency)"])
+# --- SISTEM TAB ---
+tab1, tab2, tab3 = st.tabs(["📋 Checklist Rutin", "⚠️ Lapor Gangguan", "✅ Update Perbaikan"])
 
 # ==========================================
-# MODULE 1: CHECKLIST RUTIN
+# TAB 1: RUTIN
 # ==========================================
 with tab1:
-    selected_label = st.selectbox("Pilih Aset (Rutin)", options=list(options.keys()), key="qr_rutin")
-    selected_asset = options[selected_label]
-    
-    with st.form("form_rutin", clear_on_submit=True):
-        nama_teknisi = st.text_input("Nama Teknisi")
-        results = render_sow_checklist(selected_asset['nama_aset'])
-        kondisi_final = st.radio("Kesimpulan Kondisi", ["Baik", "Rusak"])
-        foto = st.camera_input("Foto Bukti Rutin", key="foto_rutin")
-        
-        submit_rutin = st.form_submit_button("Simpan Laporan Rutin")
-        if submit_rutin:
-            # (Logika simpan ke maintenance_logs tetap sama)
-            st.success("Laporan Rutin Tersimpan!")
+    sel_rutin = st.selectbox("Pilih Aset", options=list(options.keys()), key="r1")
+    with st.form("f_rutin"):
+        nama = st.text_input("Nama Teknisi")
+        res = render_sow_checklist(options[sel_rutin]['nama_aset'])
+        f_rutin = st.camera_input("Foto Bukti", key="f1")
+        if st.form_submit_button("Simpan"):
+            st.success("Data Tersimpan!")
 
 # ==========================================
-# MODULE 2: LAPOR GANGGUAN (BARU)
+# TAB 2: LAPOR GANGGUAN
 # ==========================================
 with tab2:
-    st.warning("Gunakan form ini hanya untuk melaporkan kerusakan mendadak!")
-    selected_label_gng = st.selectbox("Pilih Aset Bermasalah", options=list(options.keys()), key="qr_gangguan")
-    aset_gng = options[selected_label_gng]
-    
-    with st.form("form_gangguan", clear_on_submit=True):
+    sel_gng = st.selectbox("Aset Bermasalah", options=list(options.keys()), key="g2")
+    with st.form("f_gangguan"):
         pelapor = st.text_input("Nama Pelapor")
-        masalah = st.text_area("Deskripsi Kerusakan", placeholder="Jelaskan apa yang rusak...")
-        urgensi = st.select_slider("Tingkat Urgensi", options=["Rendah", "Sedang", "Darurat"])
-        foto_gng = st.camera_input("Foto Kerusakan", key="foto_gng")
+        masalah = st.text_area("Detail Kerusakan")
+        urgensi = st.select_slider("Urgensi", options=["Rendah", "Sedang", "Darurat"])
+        f_gng = st.camera_input("Foto Kerusakan", key="f2")
+        if st.form_submit_button("Kirim Laporan"):
+            if pelapor and masalah:
+                url = None
+                if f_gng:
+                    fn = f"GNG_{datetime.datetime.now().strftime('%H%M%S')}.jpg"
+                    supabase.storage.from_("foto_maintenance").upload(fn, f_gng.getvalue())
+                    url = supabase.storage.from_("foto_maintenance").get_public_url(fn)
+                supabase.table("gangguan_logs").insert({
+                    "asset_id": options[sel_gng]['id'], "teknisi": pelapor,
+                    "masalah": masalah, "urgensi": urgensi, "foto_kerusakan_url": url
+                }).execute()
+                st.error("Laporan Dikirim!")
+
+# ==========================================
+# TAB 3: UPDATE PERBAIKAN (NEW!)
+# ==========================================
+with tab3:
+    st.subheader("Penyelesaian Laporan Kerusakan")
+    issues = get_open_issues()
+    
+    if not issues:
+        st.info("Alhamdulillah, saat ini tidak ada laporan kerusakan aktif.")
+    else:
+        # Buat pilihan laporan yang mau di-update
+        issue_options = {f"[{i['urgensi']}] {i['assets']['nama_aset']} - {i['masalah'][:30]}...": i for i in issues}
+        sel_issue_label = st.selectbox("Pilih Laporan untuk Diselesaikan", options=list(issue_options.keys()))
+        issue_data = issue_options[sel_issue_label]
         
-        submit_gng = st.form_submit_button("KIRIM LAPORAN DARURAT")
-        if submit_gng:
-            # Logika simpan ke tabel gangguan_logs
-            st.error(f"Laporan Bahaya untuk {selected_label_gng} telah dikirim!")
+        st.write(f"**Detail Masalah:** {issue_data['masalah']}")
+        st.write(f"**Dilaporkan Oleh:** {issue_data['teknisi']} ({issue_data['created_at'][:10]})")
+        
+        with st.form("f_perbaikan"):
+            t_perbaikan = st.text_input("Nama Teknisi Perbaikan")
+            tindakan = st.text_area("Tindakan yang Dilakukan (Kronologi)")
+            f_after = st.camera_input("Foto Bukti Selesai (After)", key="f3")
+            
+            if st.form_submit_button("Update Menjadi SELESAI (Resolved)"):
+                if t_perbaikan and tindakan:
+                    url_after = None
+                    if f_after:
+                        fn_a = f"FIX_{datetime.datetime.now().strftime('%H%M%S')}.jpg"
+                        supabase.storage.from_("foto_maintenance").upload(fn_a, f_after.getvalue())
+                        url_after = supabase.storage.from_("foto_maintenance").get_public_url(fn_a)
+                    
+                    # UPDATE DATA DI SUPABASE
+                    supabase.table("gangguan_logs").update({
+                        "status": "Resolved",
+                        "tindakan_perbaikan": tindakan,
+                        "teknisi_perbaikan": t_perbaikan,
+                        "tgl_perbaikan": datetime.datetime.now().isoformat(),
+                        "foto_setelah_perbaikan_url": url_after
+                    }).eq("id", issue_data['id']).execute()
+                    
+                    st.success("Status Aset kembali NORMAL (Resolved)!")
+                    st.balloons()
+                else:
+                    st.warning("Mohon isi nama teknisi dan tindakan perbaikan.")
