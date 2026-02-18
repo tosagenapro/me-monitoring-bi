@@ -5,7 +5,6 @@ from supabase import create_client, Client
 st.set_page_config(page_title="ME Monitoring BI Balikpapan", layout="centered")
 
 # Inisialisasi Koneksi Supabase
-# Ganti URL dan KEY dengan milik Bapak jika berbeda
 URL = st.secrets["SUPABASE_URL"]
 KEY = st.secrets["SUPABASE_KEY"]
 supabase: Client = create_client(URL, KEY)
@@ -15,13 +14,10 @@ st.subheader("Bank Indonesia Balikpapan")
 
 # --- FUNGSI AMBIL DATA ---
 def get_assets():
-    # Mengambil daftar aset untuk dropdown
     query = supabase.table("assets").select("id, nama_aset").execute()
     return query.data
 
 def get_logs():
-    # Mengambil 10 laporan terbaru beserta nama asetnya
-    # Kita gunakan join tabel assets melalui asset_id
     query = supabase.table("maintenance_logs").select("*, assets(nama_aset)").order("created_at", desc=True).limit(10).execute()
     return query.data
 
@@ -29,7 +25,6 @@ def get_logs():
 with st.form("maintenance_form", clear_on_submit=True):
     st.write("### Input Laporan Baru")
     
-    # Ambil data aset untuk pilihan
     asset_data = get_assets()
     asset_options = {item['nama_aset']: item['id'] for item in asset_data}
     
@@ -38,10 +33,17 @@ with st.form("maintenance_form", clear_on_submit=True):
     kondisi = st.radio("Kondisi Aset", ["Sangat Baik", "Baik", "Perlu Perbaikan", "Rusak"])
     keterangan = st.text_area("Keterangan Tambahan")
     
+    # --- FITUR KAMERA ---
+    st.write("### Foto Kondisi Aset")
+    foto_ambil = st.camera_input("Ambil Foto")
+    
     submit = st.form_submit_button("Kirim Laporan")
 
     if submit:
         if nama_teknisi:
+            # Catatan: Untuk saat ini kita simpan data teks dulu. 
+            # Fitur upload file gambar ke storage Supabase perlu setting tambahan, 
+            # jadi kita pastikan input teks & kamera muncul dulu.
             data_input = {
                 "asset_id": asset_options[pilihan_aset],
                 "teknisi": nama_teknisi,
@@ -63,15 +65,12 @@ st.write("### 📋 10 Laporan Terakhir")
 logs = get_logs()
 
 if logs:
-    # Merapikan tampilan tabel
     rekap_data = []
     for log in logs:
         rekap_data.append({
-            "Waktu": log['created_at'].split('T')[0], # Ambil tanggal saja
+            "Waktu": log['created_at'].split('T')[0],
             "Aset": log['assets']['nama_aset'] if log['assets'] else "N/A",
             "Teknisi": log['teknisi'],
             "Kondisi": log['kondisi']
         })
     st.table(rekap_data)
-else:
-    st.info("Belum ada laporan masuk.")
