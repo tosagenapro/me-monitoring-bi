@@ -184,10 +184,10 @@ with tab3:
                     st.warning("Mohon isi nama teknisi dan tindakan.")
 
 # ==========================================
-# TAB 4: DASHBOARD & EXPORT (DATA LEGAL)
+# TAB 4: DASHBOARD & EXPORT (VERSI LENGKAP)
 # ==========================================
 with tab4:
-    st.subheader("📊 Penarikan Laporan Harian")
+    st.subheader("📊 Dashboard & Penarikan Laporan")
     
     raw_logs = get_all_maintenance_logs()
     
@@ -196,8 +196,22 @@ with tab4:
         df['Nama Aset'] = df['assets'].apply(lambda x: x['nama_aset'] if x else "N/A")
         df['Tanggal'] = pd.to_datetime(df['created_at']).dt.date
         
-        # Filter Tanggal
-        d_pilih = st.date_input("Pilih Tanggal Laporan", datetime.date.today())
+        # --- BAGIAN 1: DASHBOARD STATISTIK (DIBALIKIN LAGI) ---
+        col_dash1, col_dash2, col_dash3 = st.columns(3)
+        with col_dash1:
+            st.metric("Total Semua Laporan", len(df))
+        with col_dash2:
+            # Ambil data gangguan yang masih Open dari database
+            open_issues = len(get_open_issues())
+            st.metric("Gangguan Belum Selesai", open_issues, delta_color="inverse")
+        with col_dash3:
+            st.metric("Aset Terdaftar", len(asset_data))
+        
+        st.write("---")
+
+        # --- BAGIAN 2: FILTER & PREVIEW LAPORAN ---
+        st.write("### 🔍 Tarik Laporan Harian")
+        d_pilih = st.date_input("Pilih Tanggal Laporan", datetime.date.today(), key="pilih_tgl_dash")
         df_filtered = df[df['Tanggal'] == d_pilih].copy()
 
         if not df_filtered.empty:
@@ -216,30 +230,30 @@ with tab4:
                 df_final = df_final.replace(kata, "v")
             df_final = df_final.fillna("-")
 
-            # Preview data di layar (tetap simpel tanpa hiasan dulu)
-            st.write(f"Preview data tanggal: {d_pilih}")
+            # Preview data di layar
+            st.write(f"Preview Aktivitas Teknisi: {d_pilih}")
             st.dataframe(df_final, use_container_width=True)
 
-            # --- LOGIKA PENAMBAHAN AREA TANDA TANGAN DI HASIL EXPORT ---
-            # Menambah baris kosong untuk jarak
+            # --- BAGIAN 3: LOGIKA DOWNLOAD LAPORAN LEGAL ---
+            # Menambah baris kosong untuk jarak tanda tangan
             blank_row = pd.DataFrame([[None] * len(df_final.columns)], columns=df_final.columns)
             
             # Membuat Footer Tanda Tangan
             footer_content = [
-                ["", "", "", ""], # Baris kosong 1
-                ["Disetujui Oleh,", "", "Dibuat Oleh,", ""], # Judul TTD
-                ["Supervisor/SGS", "", "Teknisi ME", ""], # Jabatan
-                ["", "", "", ""], # Baris kosong 2 (untuk tempat TTD)
-                ["( ...................... )", "", f"( {df_final['teknisi'].iloc[0] if not df_final.empty else '........'} )", ""] # Nama terang
+                ["", "", "", ""], 
+                ["Disetujui Oleh,", "", "Dibuat Oleh,", ""], 
+                ["Supervisor/SGS", "", "Teknisi ME", ""], 
+                ["", "", "", ""], 
+                ["( ...................... )", "", f"( {df_final['teknisi'].iloc[0] if not df_final.empty else '........'} )", ""] 
             ]
             
-            # Konversi footer ke DataFrame agar bisa digabung
+            # Pad kolom footer agar sesuai lebar kolom data
             df_footer = pd.DataFrame(footer_content, columns=df_final.columns[:4].tolist() + df_final.columns[4:].tolist()[:len(footer_content[0])-4])
 
-            # Gabung semua: Data + Jarak + Tanda Tangan
+            # Gabung semua
             df_to_download = pd.concat([df_final, blank_row, df_footer], axis=0, ignore_index=True)
 
-            # Siapkan Header Teks untuk CSV
+            # Header Teks CSV
             header_text = f"CHECKLIST HARIAN TEKNISI ME KPwBI BALIKPAPAN\nTanggal Pekerjaan: {d_pilih}\n\n"
             csv_body = df_to_download.to_csv(index=False)
             
@@ -247,7 +261,8 @@ with tab4:
                 label="📥 Download Laporan (CSV)",
                 data=header_text + csv_body,
                 file_name=f"Laporan_ME_BI_BPN_{d_pilih}.csv",
-                mime='text/csv'
+                mime='text/csv',
+                key="dl_legal_v2"
             )
         else:
             st.warning(f"Tidak ada data aktivitas pada {d_pilih}")
