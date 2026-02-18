@@ -1,82 +1,77 @@
 import streamlit as st
-from supabase import create_client
-import datetime
+from supabase import create_client, Client
 
-# --- KONEKSI ---
-URL = "https://yuvnwzzvapasxfqzmqme.supabase.co"
-KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inl1dm53enp2YXBhc3hmcXptcW1lIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzEzNzEzMDQsImV4cCI6MjA4Njk0NzMwNH0._KG8wlwxT9sSlCKmnyjALgjHF3tRnEWIy3fk4sCYpA8"
-supabase = create_client(URL, KEY)
+# Konfigurasi Halaman
+st.set_page_config(page_title="ME Monitoring BI Balikpapan", layout="centered")
 
-st.title("🏢 ME Monitoring - BI Balikpapan")
+# Inisialisasi Koneksi Supabase
+# Ganti URL dan KEY dengan milik Bapak jika berbeda
+URL = st.secrets["SUPABASE_URL"]
+KEY = st.secrets["SUPABASE_KEY"]
+supabase: Client = create_client(URL, KEY)
 
-# --- AMBIL DATA ASET ---
+st.title("🏢 Monitoring Maintenance ME")
+st.subheader("Bank Indonesia Balikpapan")
+
+# --- FUNGSI AMBIL DATA ---
 def get_assets():
-    return supabase.table("assets").select("*").execute().data
-
-data_aset = get_assets()
-
-# --- TAMPILAN ---
-st.write("### 🛠️ Menu Pemeriksaan")
-
-if data_aset:
-    # Pilih aset yang mau diperiksa
-    nama_aset_list = [a['nama_aset'] for a in data_aset]
-    pilihan = st.selectbox("Pilih Alat yang akan dicek:", nama_aset_list)
-    
-    # Ambil detail aset yang dipilih
-    detail_aset = next(a for a in data_aset if a['nama_aset'] == pilihan)
-    
-    st.info(f"Memeriksa: **{detail_aset['nama_aset']}** | Lokasi: {detail_aset['lokasi']}")
-
-    # --- FORM CHECKLIST (Sesuai SOW) ---
-    with st.form("form_pemeriksaan"):
-        st.write("**Parameter Pemeriksaan:**")
-        kondisi = st.radio("Kondisi Alat:", ["Normal", "Perlu Perbaikan", "Rusak"])
-        catatan = st.text_area("Catatan/Temuan di Lapangan:")
-        
-        # FITUR GANDA: Bisa Kamera (untuk HP) atau Upload File (untuk Laptop)
-        foto_kamera = st.camera_input("Ambil Foto (Gunakan HP)")
-        foto_upload = st.file_uploader("Atau Upload Gambar dari Laptop", type=['jpg', 'jpeg', 'png'])
-        
-        # Pilih salah satu foto yang ada
-        foto_final = foto_kamera if foto_kamera else foto_upload
-        
-        submit = st.form_submit_button("Simpan Laporan")
-        
-        if submit:
-            path_foto = ""
-            if foto_final:
-                # Simpan foto ke Supabase Storage
-                nama_file = f"{detail_aset['id']}_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}.jpg"
-                storage_response = supabase.storage.from_("foto_maintenance").upload(nama_file, foto_final.getvalue())
-                path_foto = supabase.storage.from_("foto_maintenance").get_public_url(nama_file)
-
-            data_laporan = {
-                "asset_id": detail_aset['id'],
-                "status": kondisi,
-                "catatan": catatan,
-                "foto_url": path_foto
-            }
-            
-            try:
-                supabase.table("maintenance_logs").insert(data_laporan).execute()
-                st.success("✅ Berhasil! Laporan tersimpan.")
-            except Exception as e:
-                st.error(f"Gagal: {e}")
-# --- HALAMAN REKAP (Di bawah Form) ---
-st.divider()
-st.write("### 📜 Rekap Laporan Maintenance Terbaru")
+    # Mengambil daftar aset untuk dropdown
+    query = supabase.table("assets").select("id, nama_aset").execute()
+    return query.data
 
 def get_logs():
-    # Mengambil data laporan terbaru
-    return supabase.table("maintenance_logs").select("*, assets(nama_aset)").order("created_at", desc=True).limit(10).execute().data
+    # Mengambil 10 laporan terbaru beserta nama asetnya
+    # Kita gunakan join tabel assets melalui asset_id
+    query = supabase.table("maintenance_logs").select("*, assets(nama_aset)").order("created_at", desc=True).limit(10).execute()
+    return query.data
 
+# --- FORM INPUT ---
+with st.form("maintenance_form", clear_on_submit=True):
+    st.write("### Input Laporan Baru")
+    
+    # Ambil data aset untuk pilihan
+    asset_data = get_assets()
+    asset_options = {item['nama_aset']: item['id'] for item in asset_data}
+    
+    pilihan_aset = st.selectbox("Pilih Aset", options=list(asset_options.keys()))
+    nama_teknisi = st.text_input("Nama Teknisi")
+    kondisi = st.radio("Kondisi Aset", ["Sangat Baik", "Baik", "Perlu Perbaikan", "Rusak"])
+    keterangan = st.text_area("Keterangan Tambahan")
+    
+    submit = st.form_submit_button("Kirim Laporan")
+
+    if submit:
+        if nama_teknisi:
+            data_input = {
+                "asset_id": asset_options[pilihan_aset],
+                "teknisi": nama_teknisi,
+                "kondisi": kondisi,
+                "keterangan": keterangan
+            }
+            try:
+                supabase.table("maintenance_logs").insert(data_input).execute()
+                st.success(f"Berhasil mengirim laporan untuk {pilihan_aset}!")
+                st.balloons()
+            except Exception as e:
+                st.error(f"Gagal mengirim data: {e}")
+        else:
+            st.warning("Mohon isi nama teknisi!")
+
+# --- TABEL REKAP ---
+st.write("---")
+st.write("### 📋 10 Laporan Terakhir")
 logs = get_logs()
+
 if logs:
+    # Merapikan tampilan tabel
+    rekap_data = []
     for log in logs:
-        with st.expander(f"📅 {log['created_at'][:10]} - {log['assets']['nama_aset']} ({log['status']})"):
-            st.write(f"**Catatan:** {log['catatan']}")
-            if log['foto_url']:
-                st.image(log['foto_url'], caption="Foto Temuan", width=300)
+        rekap_data.append({
+            "Waktu": log['created_at'].split('T')[0], # Ambil tanggal saja
+            "Aset": log['assets']['nama_aset'] if log['assets'] else "N/A",
+            "Teknisi": log['teknisi'],
+            "Kondisi": log['kondisi']
+        })
+    st.table(rekap_data)
 else:
-    st.info("Belum ada riwayat laporan.")
+    st.info("Belum ada laporan masuk.")
