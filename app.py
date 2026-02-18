@@ -2,7 +2,7 @@ import streamlit as st
 from supabase import create_client, Client
 import datetime
 import pandas as pd
-from fpdf import FPDF # Library baru yang tadi kita install
+from fpdf import FPDF
 
 # --- CONFIG & KONEKSI ---
 st.set_page_config(page_title="SIMANTAP BI BPP", layout="wide")
@@ -10,7 +10,7 @@ URL = st.secrets["SUPABASE_URL"]
 KEY = st.secrets["SUPABASE_KEY"]
 supabase: Client = create_client(URL, KEY)
 
-# --- FUNGSI GENERATOR PDF (Misi Pagi Ini) ---
+# --- FUNGSI GENERATOR PDF (VERSI FIX BYTES) ---
 def generate_pdf_simantap(df, tgl):
     pdf = FPDF(orientation='P', unit='mm', format='A4')
     pdf.add_page()
@@ -38,7 +38,6 @@ def generate_pdf_simantap(df, tgl):
     pdf.set_font("Arial", "", 7)
     for _, row in df.iterrows():
         exclude = ['Nama Aset', 'teknisi', 'kondisi', 'keterangan', 'Tanggal']
-        # Ambil hanya kolom checklist yang isinya 'v'
         params = [f"{k}" for k, v in row.items() if k not in exclude and v == "v"]
         param_text = ", ".join(params)
 
@@ -59,7 +58,8 @@ def generate_pdf_simantap(df, tgl):
     nama_teknisi = df['teknisi'].iloc[0] if not df.empty else "........"
     pdf.cell(95, 5, f"( {nama_teknisi} )", ln=1, align="C")
 
-    return pdf.output()
+    # Kembalikan sebagai bytes biner
+    return bytes(pdf.output())
 
 # --- TAMPILAN JUDUL APLIKASI ---
 st.title("🚀 SIMANTAP BI BPP")
@@ -77,7 +77,7 @@ def get_open_issues():
 def get_all_maintenance_logs():
     return supabase.table("maintenance_logs").select("*, assets(nama_aset, kode_qr)").order("created_at", desc=True).execute().data
 
-# --- FUNGSI CHECKLIST SOW LENGKAP ---
+# --- FUNGSI CHECKLIST SOW ---
 def render_sow_checklist(nama_unit):
     st.info(f"📋 Parameter SOW: {nama_unit}")
     ck = {}
@@ -205,14 +205,13 @@ with tab4:
         
         st.write("---")
         st.write("### 🔍 Tarik Laporan Harian")
-        d_pilih = st.date_input("Pilih Tanggal Laporan", datetime.date.today())
+        d_pilih = st.date_input("Pilih Tanggal Laporan", datetime.date.today(), key="dash_tgl")
         df_filtered = df[df['Tanggal'] == d_pilih].copy()
 
         if not df_filtered.empty:
             checklist_df = pd.json_normalize(df_filtered['checklist_data'])
             df_final = pd.concat([df_filtered[['Nama Aset', 'teknisi', 'kondisi', 'keterangan']].reset_index(drop=True), checklist_df.reset_index(drop=True)], axis=1)
             
-            # Konversi nilai ke 'v' agar PDF lebih bersih
             kata_kunci = ["Sudah", "Normal", "Baik", "Lancar", "Bersih", "Ya", "Berfungsi Baik", "Lengkap/Baik", "OK"]
             for kata in kata_kunci:
                 df_final = df_final.replace(kata, "v")
@@ -220,12 +219,14 @@ with tab4:
 
             st.dataframe(df_final, use_container_width=True)
             
-            # TOMBOL DOWNLOAD PDF
-            pdf_bytes = generate_pdf_simantap(df_final, d_pilih)
+            # GENERATE PDF BYTES
+            pdf_data = generate_pdf_simantap(df_final, d_pilih)
+            
             st.download_button(
                 label="📥 Download Laporan PDF (Siap Cetak)",
-                data=pdf_bytes,
+                data=pdf_data,
                 file_name=f"Laporan_SIMANTAP_{d_pilih}.pdf",
-                mime="application/pdf"
+                mime="application/pdf",
+                key="btn_pdf_final"
             )
         else: st.warning(f"Tidak ada data pada {d_pilih}")
