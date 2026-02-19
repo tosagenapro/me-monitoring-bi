@@ -212,16 +212,38 @@ elif st.session_state.hal == 'Update':
 
 elif st.session_state.hal == 'Export':
     if st.button("⬅️ KEMBALI"): pindah('Menu'); st.rerun()
-    st.subheader("📊 Dashboard & PDF")
+    st.subheader("📊 Monitoring & Export Laporan Spesifik")
+    
     logs = get_all_logs()
     if logs:
         df = pd.DataFrame(logs)
         df['Nama Aset'] = df['assets'].apply(lambda x: x['nama_aset'] if x else "N/A")
         df['Tanggal'] = pd.to_datetime(df['created_at']).dt.date
-        dp = st.date_input("Pilih Tanggal", datetime.date.today())
-        df_f = df[df['Tanggal'] == dp].copy()
-        st.dataframe(df_f[['Nama Aset', 'periode', 'teknisi', 'kondisi', 'keterangan']], use_container_width=True)
-        n_bi = st.selectbox("Mengetahui (BI)", list_peg)
-        n_tk = st.selectbox("Dibuat (ME)", list_tek)
-        if st.download_button("📥 DOWNLOAD PDF", generate_pdf(df_f, dp, n_bi, n_tk), f"Lap_{dp}.pdf"):
-            st.success("Berhasil!")
+        
+        # --- FILTER BARU ---
+        col_f1, col_f2 = st.columns(2)
+        with col_f1:
+            tgl_awal = st.date_input("Dari Tanggal", datetime.date.today() - datetime.timedelta(days=7))
+            tgl_akhir = st.date_input("Sampai Tanggal", datetime.date.today())
+        with col_f2:
+            f_periode = st.multiselect("Filter Periode Pekerjaan", ["Harian", "Mingguan", "Bulanan"], default=["Harian", "Mingguan", "Bulanan"])
+        
+        # Proses Filter Data
+        mask = (df['Tanggal'] >= tgl_awal) & (df['Tanggal'] <= tgl_akhir) & (df['periode'].isin(f_periode))
+        df_f = df[mask].copy()
+        
+        st.write(f"Menampilkan {len(df_f)} data ditemukan.")
+        st.dataframe(df_f[['Nama Aset', 'periode', 'teknisi', 'kondisi', 'keterangan', 'Tanggal']], use_container_width=True)
+        
+        # Tombol Download
+        col_p1, col_p2 = st.columns(2)
+        with col_p1: n_bi = st.selectbox("Mengetahui (BI)", list_peg)
+        with col_p2: n_tk = st.selectbox("Dibuat (ME)", list_tek)
+        
+        if not df_f.empty:
+            pdf_data = generate_pdf(df_f, f"{tgl_awal} s/d {tgl_akhir}", n_bi, n_tk)
+            st.download_button(f"📥 DOWNLOAD PDF ({', '.join(f_periode)})", pdf_data, f"Laporan_ME_{tgl_awal}_{tgl_akhir}.pdf")
+        else:
+            st.warning("Data tidak ditemukan untuk filter ini.")
+    else:
+        st.info("Belum ada data di database.")
