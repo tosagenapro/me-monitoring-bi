@@ -64,11 +64,11 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-# --- 4. HEADER UTAMA ---
+# --- 4. HEADER UTAMA (DENGAN IDENTITAS ME) ---
 st.markdown("""
     <div class="main-header">
-        <h1>⚡ SIMANTAP BI BALIKPAPAN</h1>
-        <p>Sistem Informasi Monitoring Aset dan Pemeliharaan Terpadu</p>
+        <h1>⚡ SIMANTAP ME | KPwBI BALIKPAPAN</h1>
+        <p>Sistem Informasi Monitoring Aset & Pemeliharaan Terpadu Fasilitas Mechanical Electrical</p>
     </div>
     """, unsafe_allow_html=True)
 
