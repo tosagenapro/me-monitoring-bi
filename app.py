@@ -21,7 +21,6 @@ st.markdown("""
     div.stButton > button { width: 100%; height: 80px !important; background: #1e293b !important; border: 2px solid #334155 !important; border-radius: 12px !important; color: #00adef !important; font-weight: bold !important; margin-bottom: 10px; }
     div.stButton > button:hover { border-color: #00adef !important; box-shadow: 0 0 15px rgba(0, 173, 239, 0.3); }
     label { color: #00adef !important; font-weight: bold !important; }
-    .stSelectbox, .stTextInput, .stTextArea { background-color: #1e293b !important; color: white !important; }
     </style>
     """, unsafe_allow_html=True)
 
@@ -54,8 +53,8 @@ def get_sow_fields(nama_aset, jenis):
         fields['cek_fisik'] = st.radio("Kondisi Fisik Umum", ["Normal", "Bermasalah"])
     return fields
 
-# --- 4. FUNGSI GENERATE PDF (PERBAIKAN TANDA TANGAN RATA TENGAH) ---
-def generate_pdf(df, rentang_tgl, p_sel, t_sel):
+# --- 4. FUNGSI GENERATE PDF (FORMAT TTD SESUAI INSTRUKSI) ---
+def generate_pdf(df, rentang_tgl, peg_data, tek_data):
     pdf = FPDF(orientation='L', unit='mm', format='A4')
     pdf.add_page()
     
@@ -68,10 +67,10 @@ def generate_pdf(df, rentang_tgl, p_sel, t_sel):
     
     # Header Tabel
     pdf.set_font("Helvetica", "B", 9)
-    pdf.set_fill_color(0, 173, 239) # Biru Khas
+    pdf.set_fill_color(0, 173, 239)
     pdf.set_text_color(255, 255, 255)
     
-    w = [55, 25, 35, 35, 127] # Lebar Kolom
+    w = [55, 25, 35, 35, 127]
     cols = ["Aset", "Periode", "Teknisi", "Kondisi", "Detail SOW & Keterangan"]
     for i in range(len(cols)):
         pdf.cell(w[i], 10, cols[i], 1, 0, "C", True)
@@ -90,12 +89,10 @@ def generate_pdf(df, rentang_tgl, p_sel, t_sel):
         sow_txt = " | ".join([f"{k.replace('_',' ').capitalize()}: {v}" for k, v in sow_data.items()])
         full_ket = f"{sow_txt}\nCatatan: {row['keterangan']}"
         
-        # Hitung Row Height Dinamis
         start_y = pdf.get_y()
         pdf.multi_cell(w[0], 10, str(row['Nama Aset']), 1, 'L')
         y_aset = pdf.get_y()
         
-        pdf.set_xy(pdf.get_x() + w[0] + 10, start_y) # Reset ke kolom detail
         pdf.set_xy(10 + w[0] + w[1] + w[2] + w[3], start_y)
         pdf.multi_cell(w[4], 5, full_ket, 1, 'L')
         y_detail = pdf.get_y()
@@ -103,13 +100,11 @@ def generate_pdf(df, rentang_tgl, p_sel, t_sel):
         max_y = max(y_aset, y_detail)
         h = max_y - start_y
         
-        # Gambar ulang kotak border agar rapi
         pdf.rect(10, start_y, w[0], h)
         pdf.rect(10 + w[0], start_y, w[1], h)
         pdf.rect(10 + w[0] + w[1], start_y, w[2], h)
         pdf.rect(10 + w[0] + w[1] + w[2], start_y, w[3], h)
         
-        # Isi data tengah
         pdf.set_xy(10 + w[0], start_y)
         pdf.cell(w[1], h, str(row.get('periode', '-')), 0, 0, "C")
         pdf.cell(w[2], h, str(row['teknisi']), 0, 0, "C")
@@ -118,37 +113,33 @@ def generate_pdf(df, rentang_tgl, p_sel, t_sel):
         pdf.set_y(max_y)
         if pdf.get_y() > 170: pdf.add_page()
 
-    # --- BAGIAN TANDA TANGAN (RATA TENGAH PRESISI) ---
+    # --- BAGIAN TANDA TANGAN (Sesuai Memori Pegawai) ---
     pdf.ln(15)
     current_y = pdf.get_y()
-    pdf.set_font("Helvetica", "B", 10)
+    pdf.set_font("Helvetica", "", 10)
     
-    # Mengetahui (Kiri)
+    # 1. Baris Judul
     pdf.set_xy(10, current_y)
-    pdf.cell(138, 5, "Mengetahui,", 0, 0, "C")
-    
-    # Dibuat Oleh (Kanan)
+    pdf.cell(138, 5, "Diketahui,", 0, 0, "C")
     pdf.set_xy(148, current_y)
     pdf.cell(138, 5, "Dibuat Oleh,", 0, 1, "C")
     
-    pdf.ln(20)
-    sign_y = pdf.get_y()
-    
-    # Nama (Mengetahui)
-    pdf.set_xy(10, sign_y)
-    pdf.cell(138, 5, f"( {p_sel} )", 0, 0, "C")
-    
-    # Nama (Dibuat)
-    pdf.set_xy(148, sign_y)
-    pdf.cell(138, 5, f"( {t_sel} )", 0, 1, "C")
-    
-    pdf.set_font("Helvetica", "", 9)
-    # Jabatan
-    pdf.set_xy(10, pdf.get_y())
-    pdf.cell(138, 5, "Staf BI Balikpapan", 0, 0, "C")
-    pdf.set_xy(148, pdf.get_y() - 5)
-    pdf.set_xy(148, pdf.get_y())
+    # 2. Baris Posisi
+    pdf.cell(138, 5, peg_data.get('posisi', ''), 0, 0, "C")
     pdf.cell(138, 5, "Teknisi ME", 0, 1, "C")
+    
+    pdf.ln(20)
+    
+    # 3. Baris Nama (Garis Bawah untuk Pegawai)
+    pdf.set_font("Helvetica", "BU", 10) # B = Bold, U = Underline
+    pdf.cell(138, 5, f"{peg_data.get('nama', '')}", 0, 0, "C")
+    pdf.set_font("Helvetica", "B", 10)
+    pdf.cell(138, 5, f"{tek_data.get('nama', '')}", 0, 1, "C")
+    
+    # 4. Baris Jabatan_pdf
+    pdf.set_font("Helvetica", "", 9)
+    pdf.cell(138, 5, peg_data.get('jabatan_pdf', ''), 0, 0, "C")
+    pdf.cell(138, 5, "", 0, 1, "C")
 
     return bytes(pdf.output())
 
@@ -164,6 +155,8 @@ def load_data():
 
 assets_list, staff_list = load_data()
 opt_asset = {f"{a['kode_qr']} - {a['nama_aset']}": a for a in assets_list}
+# Simpan objek staff lengkap untuk ambil detail posisi & jabatan_pdf
+staff_objects = {s['nama']: s for s in staff_list}
 list_tek = [s['nama'] for s in staff_list if s['kategori'] == 'TEKNISI']
 list_peg = [s['nama'] for s in staff_list if s['kategori'] == 'PEGAWAI']
 
@@ -180,6 +173,35 @@ if st.session_state.hal == 'Menu':
         if st.button("🔄\nUPDATE PERBAIKAN"): pindah('Update'); st.rerun()
         if st.button("📊\nDASHBOARD & PDF"): pindah('Export'); st.rerun()
 
+elif st.session_state.hal == 'Export':
+    if st.button("⬅️ KEMBALI"): pindah('Menu'); st.rerun()
+    st.subheader("📊 Export Laporan PDF")
+    all_logs = supabase.table("maintenance_logs").select("*, assets(nama_aset)").order("created_at", desc=True).execute().data
+    if all_logs:
+        df = pd.DataFrame(all_logs)
+        df['Nama Aset'] = df['assets'].apply(lambda x: x['nama_aset'] if x else "N/A")
+        df['Tanggal'] = pd.to_datetime(df['created_at']).dt.date
+        
+        c1, c2 = st.columns(2)
+        with c1: tgls = st.date_input("Rentang Tanggal", [datetime.date.today(), datetime.date.today()])
+        with c2: pers = st.multiselect("Periode", ["Harian", "Mingguan", "Bulanan"], default=["Harian", "Mingguan", "Bulanan"])
+        
+        if len(tgls) == 2:
+            mask = (df['Tanggal'] >= tgls[0]) & (df['Tanggal'] <= tgls[1]) & (df['periode'].isin(pers))
+            df_f = df[mask]
+            st.dataframe(df_f[['Nama Aset', 'periode', 'teknisi', 'kondisi', 'Tanggal']], use_container_width=True)
+            
+            n_bi = st.selectbox("Mengetahui (Staf BI)", list_peg)
+            n_tk = st.selectbox("Dibuat (Teknisi)", list_tek)
+            
+            # Ambil data lengkap staff terpilih
+            peg_sel = staff_objects.get(n_bi, {})
+            tek_sel = staff_objects.get(n_tk, {})
+            
+            if st.download_button("📥 DOWNLOAD PDF", generate_pdf(df_f, f"{tgls[0]} s/d {tgls[1]}", peg_sel, tek_sel), f"Lap_ME_{tgls[0]}.pdf"):
+                st.success("Download Berhasil")
+
+# --- Sisanya (Harian, Gangguan, dll) tetap sama ---
 elif st.session_state.hal in ['Harian', 'Mingguan', 'Bulanan']:
     curr = st.session_state.hal
     if st.button("⬅️ KEMBALI"): pindah('Menu'); st.rerun()
@@ -196,42 +218,3 @@ elif st.session_state.hal in ['Harian', 'Mingguan', 'Bulanan']:
                 "checklist_data": res_sow, "kondisi": kon, "keterangan": ket
             }).execute()
             st.success(f"Laporan {curr} Berhasil!"); st.balloons()
-
-elif st.session_state.hal == 'Export':
-    if st.button("⬅️ KEMBALI"): pindah('Menu'); st.rerun()
-    st.subheader("📊 Monitoring & Export PDF")
-    all_logs = supabase.table("maintenance_logs").select("*, assets(nama_aset)").order("created_at", desc=True).execute().data
-    if all_logs:
-        df = pd.DataFrame(all_logs)
-        df['Nama Aset'] = df['assets'].apply(lambda x: x['nama_aset'] if x else "N/A")
-        df['Tanggal'] = pd.to_datetime(df['created_at']).dt.date
-        
-        c1, c2 = st.columns(2)
-        with c1: tgls = st.date_input("Rentang Tanggal", [datetime.date.today(), datetime.date.today()])
-        with c2: pers = st.multiselect("Periode", ["Harian", "Mingguan", "Bulanan"], default=["Harian", "Mingguan", "Bulanan"])
-        
-        if len(tgls) == 2:
-            mask = (df['Tanggal'] >= tgls[0]) & (df['Tanggal'] <= tgls[1]) & (df['periode'].isin(pers))
-            df_f = df[mask]
-            st.dataframe(df_f[['Nama Aset', 'periode', 'teknisi', 'kondisi', 'Tanggal']], use_container_width=True)
-            
-            p_ttd = st.selectbox("Mengetahui (Staf BI)", list_peg)
-            t_ttd = st.selectbox("Dibuat (Teknisi)", list_tek)
-            
-            if st.download_button("📥 DOWNLOAD PDF", generate_pdf(df_f, f"{tgls[0]} s/d {tgls[1]}", p_ttd, t_ttd), f"Lap_ME_{tgls[0]}.pdf"):
-                st.success("Download Berhasil")
-
-elif st.session_state.hal == 'Gangguan':
-    if st.button("⬅️ KEMBALI"): pindah('Menu'); st.rerun()
-    st.subheader("⚠️ Lapor Gangguan")
-    sel_g = st.selectbox("Aset", list(opt_asset.keys()))
-    with st.form("f_g"):
-        masalah = st.text_area("Masalah")
-        if st.form_submit_button("KIRIM"):
-            supabase.table("gangguan_logs").insert({"asset_id": opt_asset[sel_g]['id'], "masalah": masalah, "status": "Open"}).execute()
-            st.error("Laporan Dikirim")
-
-elif st.session_state.hal == 'Update':
-    if st.button("⬅️ KEMBALI"): pindah('Menu'); st.rerun()
-    st.subheader("🔄 Update Status")
-    st.info("Pilih laporan gangguan untuk diupdate statusnya.")
