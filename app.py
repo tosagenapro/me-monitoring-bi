@@ -13,71 +13,56 @@ URL = st.secrets["SUPABASE_URL"]
 KEY = st.secrets["SUPABASE_KEY"]
 supabase: Client = create_client(URL, KEY)
 
-# --- FUNGSI GENERATOR PDF (VERSI FINAL ANTI-BERANTAKAN) ---
+# --- FUNGSI GENERATOR PDF (VERSI LANDSCAPE - LEGA & RAPI) ---
 def generate_pdf_simantap(df, tgl):
-    # Gunakan Helvetica agar lebih aman di server
-    pdf = FPDF(orientation='P', unit='mm', format='A4')
+    # 'L' artinya Landscape
+    pdf = FPDF(orientation='L', unit='mm', format='A4')
     pdf.add_page()
     
-    # Header Judul
-    pdf.set_font("Helvetica", "B", 14)
-    pdf.cell(0, 7, "CHECKLIST HARIAN TEKNISI ME", ln=True, align="C")
-    pdf.set_font("Helvetica", "B", 12)
-    pdf.cell(0, 7, "KPwBI BALIKPAPAN (SIMANTAP)", ln=True, align="C")
-    pdf.set_font("Helvetica", "", 10)
-    pdf.cell(0, 7, f"Tanggal Laporan: {tgl}", ln=True, align="C")
+    # Header Judul (Lebar Landscape A4 itu 297mm, margin 10mm kiri-kanan = 277mm)
+    pdf.set_font("Helvetica", "B", 16)
+    pdf.cell(0, 10, "CHECKLIST HARIAN TEKNISI ME - KPwBI BALIKPAPAN", ln=True, align="C")
+    pdf.set_font("Helvetica", "", 12)
+    pdf.cell(0, 7, f"Tanggal Pekerjaan: {tgl}", ln=True, align="C")
     pdf.ln(5)
-    pdf.line(10, 32, 200, 32) 
-    pdf.ln(8)
+    pdf.line(10, 30, 287, 30) # Garis panjang mengikuti lebar kertas
+    pdf.ln(10)
 
-    # Table Header
-    pdf.set_font("Helvetica", "B", 9)
+    # Table Header (Total Lebar 277mm)
+    pdf.set_font("Helvetica", "B", 10)
     pdf.set_fill_color(230, 230, 230)
-    pdf.cell(40, 10, "Nama Aset", border=1, fill=True, align="C")
-    pdf.cell(25, 10, "Teknisi", border=1, fill=True, align="C")
-    pdf.cell(25, 10, "Kondisi", border=1, fill=True, align="C")
-    pdf.cell(100, 10, "Detail Checklist (V = OK)", border=1, fill=True, align="C", ln=True)
+    pdf.cell(60, 10, "Nama Aset", border=1, fill=True, align="C")
+    pdf.cell(35, 10, "Teknisi", border=1, fill=True, align="C")
+    pdf.cell(35, 10, "Kondisi", border=1, fill=True, align="C")
+    pdf.cell(147, 10, "Detail Parameter SOW (V = Normal/Sudah)", border=1, fill=True, align="C", ln=True)
 
     # Table Body
-    pdf.set_font("Helvetica", "", 8)
+    pdf.set_font("Helvetica", "", 9)
     for _, row in df.iterrows():
         exclude = ['Nama Aset', 'teknisi', 'kondisi', 'keterangan', 'Tanggal']
         params = [f"{k}" for k, v in row.items() if k not in exclude and v == "v"]
         param_text = ", ".join(params) if params else "-"
         
-        # Hitung jumlah baris yang dibutuhkan oleh MultiCell (Detail Checklist)
-        # Lebar 100mm, tiap baris tinggi 5mm
-        # Kita estimasi tinggi baris agar border tetap rapi
-        text_width = pdf.get_string_width(param_text)
-        num_lines = (text_width // 95) + 1 
-        row_height = 10 if num_lines == 1 else (num_lines * 5)
-
-        # Cetak baris dengan tinggi yang sama
-        curr_x = pdf.get_x()
-        curr_y = pdf.get_y()
+        # Nama Aset kita kasih 60mm (sangat lega)
+        pdf.cell(60, 10, str(row['Nama Aset'])[:40], border=1)
+        pdf.cell(35, 10, str(row['teknisi']), border=1, align="C")
+        pdf.cell(35, 10, str(row['kondisi']), border=1, align="C")
         
-        # Kolom-kolom standar
-        pdf.multi_cell(40, row_height, str(row['Nama Aset']), border=1, align="L")
-        pdf.set_xy(curr_x + 40, curr_y)
-        pdf.multi_cell(25, row_height, str(row['teknisi']), border=1, align="C")
-        pdf.set_xy(curr_x + 65, curr_y)
-        pdf.multi_cell(25, row_height, str(row['kondisi']), border=1, align="C")
-        pdf.set_xy(curr_x + 90, curr_y)
+        # Detail SOW kita kasih sisanya (147mm) - Pasti muat banyak teks
+        pdf.cell(147, 10, param_text[:100], border=1, ln=True)
         
-        # Kolom detail yang bisa panjang (Gunakan tinggi 5 per baris agar rapat)
-        pdf.multi_cell(100, (row_height/max(1, num_lines)), param_text, border=1, align="L")
-        
-    # Tanda Tangan (Selalu di paling bawah)
-    pdf.set_y(-50)
-    pdf.set_font("Helvetica", "", 10)
-    pdf.cell(95, 5, "Disetujui Oleh,", 0, 0, "C")
-    pdf.cell(95, 5, "Dibuat Oleh,", 0, 1, "C")
-    pdf.cell(95, 5, "Supervisor / SGS", 0, 0, "C")
-    pdf.cell(95, 5, "Teknisi ME", 0, 1, "C")
+    # Tanda Tangan (Di Landscape, kita bagi dua sisi kiri dan kanan)
+    pdf.set_y(-45)
+    pdf.set_font("Helvetica", "B", 10)
+    
+    # Posisi Tanda Tangan
+    pdf.cell(138, 5, "Disetujui Oleh,", 0, 0, "C")
+    pdf.cell(138, 5, "Dibuat Oleh,", 0, 1, "C")
     pdf.ln(15)
-    pdf.cell(95, 5, "( ................................... )", 0, 0, "C")
-    tkn = df['teknisi'].iloc[0] if not df.empty else "........"
-    pdf.cell(95, 5, f"( {tkn} )", 0, 1, "C")
+    
+    pdf.cell(138, 5, "( ................................... )", 0, 0, "C")
+    nama_tek = df['teknisi'].iloc[0] if not df.empty else "Teknisi ME"
+    pdf.cell(138, 5, f"( {nama_tek} )", 0, 1, "C")
 
     return bytes(pdf.output())
 
