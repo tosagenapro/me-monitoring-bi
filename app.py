@@ -42,16 +42,18 @@ SOW_MASTER = {
     }
 }
 
-# --- 3. CSS CUSTOM ---
+# --- 3. CSS CUSTOM (TERMASUK STYLE HEADER BARU) ---
 st.markdown("""
     <style>
     header {visibility: hidden;}
     .stApp { background: #0f172a; }
     .main-header { 
-        text-align: center; padding: 15px; background: #1e293b; 
-        border: 1px solid #334155; border-radius: 10px; margin-bottom: 25px; 
+        text-align: center; padding: 20px; background: #1e293b; 
+        border: 1px solid #334155; border-radius: 12px; margin-bottom: 25px; 
     }
-    .main-header h1 { color: #94a3b8; margin: 0; font-size: 1.4rem; letter-spacing: 2px; }
+    .main-header h1 { color: #38bdf8; margin: 0; font-size: 1.8rem; letter-spacing: 3px; font-weight: 800; }
+    .main-header p { color: #94a3b8; margin: 5px 0 0 0; font-size: 0.9rem; font-style: italic; letter-spacing: 1px; }
+    
     div.stButton > button { 
         width: 100%; height: 70px !important; background: #1e293b !important; 
         border: 1px solid #334155 !important; border-radius: 8px !important; 
@@ -62,7 +64,15 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-# --- 4. FUNGSI FOTO & PDF ---
+# --- 4. HEADER UTAMA ---
+st.markdown("""
+    <div class="main-header">
+        <h1>⚡ SIMANTAP BI BALIKPAPAN</h1>
+        <p>Sistem Informasi Monitoring Aset dan Pemeliharaan Terpadu</p>
+    </div>
+    """, unsafe_allow_html=True)
+
+# --- 5. FUNGSI FOTO & PDF ---
 def upload_foto(file):
     if file is not None:
         filename = f"{uuid.uuid4()}.jpg"
@@ -106,19 +116,18 @@ def generate_pdf(df, rentang_tgl, peg_data, tek_data, judul="LAPORAN"):
             pdf.set_y(s_y + h)
             if pdf.get_y() > 170: pdf.add_page()
         
-        # --- STAFF SIGNATURE FORMAT PAK DANI ---
         pdf.ln(15); pdf.set_font("Helvetica", "", 10)
         pdf.cell(138, 5, "Diketahui,", 0, 0, "C"); pdf.cell(138, 5, "Dibuat oleh,", 0, 1, "C")
         pdf.cell(138, 5, str(peg_data.get('posisi', '')), 0, 0, "C"); pdf.cell(138, 5, "CV. INDO MEGA JAYA", 0, 1, "C")
         pdf.ln(18)
-        pdf.set_font("Helvetica", "BU", 10) # Nama digarisbawahi
+        pdf.set_font("Helvetica", "BU", 10)
         pdf.cell(138, 5, str(peg_data.get('nama', '')), 0, 0, "C"); pdf.cell(138, 5, str(tek_data.get('nama', '')), 0, 1, "C")
         pdf.set_font("Helvetica", "", 9)
         pdf.cell(138, 5, str(peg_data.get('jabatan_pdf', '')), 0, 0, "C"); pdf.cell(138, 5, "Teknisi ME", 0, 1, "C")
         return pdf.output(dest='S').encode('latin-1')
     except: return None
 
-# --- 5. SETUP DATA ---
+# --- 6. SETUP DATA & NAVIGASI ---
 if 'hal' not in st.session_state: st.session_state.hal = 'Menu'
 def pindah(n): st.session_state.hal = n
 
@@ -134,9 +143,7 @@ opt_asset = {f"{a['kode_qr']} - {a['nama_aset']}": a for a in assets_list}
 list_tek = [s['nama'] for s in staff_list if s['kategori'] == 'TEKNISI']
 list_peg = [s['nama'] for s in staff_list if s['kategori'] == 'PEGAWAI']
 
-st.markdown('<div class="main-header"><h1>⚡ SIMANTAP BI BALIKPAPAN</h1></div>', unsafe_allow_html=True)
-
-# --- 6. ROUTING HALAMAN ---
+# --- 7. ROUTING HALAMAN ---
 if st.session_state.hal == 'Menu':
     c1, mid, c2 = st.columns([1, 0.2, 1])
     with c1:
@@ -213,34 +220,41 @@ elif st.session_state.hal in ['Harian', 'Mingguan', 'Bulanan']:
         if st.form_submit_button("💾 SIMPAN DATA"):
             k_f = " | ".join(resp) + (f" | Catatan: {cat}" if cat else "")
             supabase.table("maintenance_logs").insert({"asset_id": opt_asset[sel_a_l]['id'], "teknisi": t, "periode": st.session_state.hal, "kondisi": kon, "keterangan": k_f}).execute()
-            st.success(f"✅ Berhasil! Data {st.session_state.hal} {nama_a} disimpan."); st.toast("Checklist Tersimpan!", icon="💾")
+            st.success(f"✅ Berhasil! Data {st.session_state.hal} disimpan."); st.toast("Checklist Tersimpan!", icon="💾")
             if st.session_state.hal == 'Bulanan': st.balloons()
             time.sleep(1.5); st.rerun()
 
 elif st.session_state.hal == 'Export':
     if st.button("⬅️ KEMBALI"): pindah('Menu'); st.rerun()
-    t1, t2 = st.tabs(["📑 Log Checklist", "⚠️ Log Kerusakan"])
+    st.subheader("📊 Export Laporan PDF")
+    t1, t2 = st.tabs(["📑 Log Checklist", "⚠️ Log Gangguan"])
     with t1:
         res = supabase.table("maintenance_logs").select("*, assets(nama_aset)").order("created_at", desc=True).execute().data
         if res:
             df = pd.DataFrame(res); df['Nama Aset'] = df['assets'].apply(lambda x: x['nama_aset'] if x else "N/A")
-            dr = st.date_input("Filter Tanggal", [datetime.date.today(), datetime.date.today()], key="d1")
+            c1, c2 = st.columns(2)
+            with c1: dr = st.date_input("Rentang Tanggal", [datetime.date.today(), datetime.date.today()], key="d1")
+            with c2: filter_p = st.selectbox("Filter Periode", ["Semua", "Harian", "Mingguan", "Bulanan"], key="f_p")
+            
             if len(dr) == 2:
                 dff = df[(pd.to_datetime(df['created_at']).dt.date >= dr[0]) & (pd.to_datetime(df['created_at']).dt.date <= dr[1])]
+                if filter_p != "Semua": dff = dff[dff['periode'] == filter_p]
+                
                 st.dataframe(dff[['Nama Aset', 'periode', 'teknisi', 'kondisi', 'created_at']], use_container_width=True)
-                p, t = st.selectbox("Diketahui (BI)", list_peg, key="p1"), st.selectbox("Dibuat (IMJ)", list_tek, key="t1")
-                if st.button("CETAK PDF CHECKLIST"):
-                    pb = generate_pdf(dff, f"{dr[0]} sd {dr[1]}", staff_map[p], staff_map[t], "LAPORAN CHECKLIST")
-                    if pb: st.download_button("Download File", pb, "Checklist_ME.pdf")
+                if not dff.empty:
+                    p, t = st.selectbox("Diketahui (BI)", list_peg, key="p1"), st.selectbox("Dibuat (IMJ)", list_tek, key="t1")
+                    if st.button("CETAK PDF CHECKLIST"):
+                        pb = generate_pdf(dff, f"{dr[0]} sd {dr[1]} ({filter_p})", staff_map[p], staff_map[t], f"LAPORAN CHECKLIST {filter_p.upper()}")
+                        if pb: st.download_button(f"Download PDF {filter_p}", pb, f"Checklist_{filter_p}_{dr[0]}.pdf")
     with t2:
         res2 = supabase.table("gangguan_logs").select("*, assets(nama_aset)").order("created_at", desc=True).execute().data
         if res2:
             df2 = pd.DataFrame(res2); df2['Nama Aset'] = df2['assets'].apply(lambda x: x['nama_aset'] if x else "N/A")
-            dr2 = st.date_input("Filter Tanggal", [datetime.date.today(), datetime.date.today()], key="d2")
+            dr2 = st.date_input("Rentang Tanggal", [datetime.date.today(), datetime.date.today()], key="d2")
             if len(dr2) == 2:
                 df2f = df2[(pd.to_datetime(df2['created_at']).dt.date >= dr2[0]) & (pd.to_datetime(df2['created_at']).dt.date <= dr2[1])]
                 st.dataframe(df2f[['Nama Aset', 'urgensi', 'teknisi', 'status', 'masalah']], use_container_width=True)
                 p2, t2 = st.selectbox("Diketahui (BI)", list_peg, key="p2"), st.selectbox("Dibuat (IMJ)", list_tek, key="t2")
                 if st.button("CETAK PDF KERUSAKAN"):
                     pb2 = generate_pdf(df2f, f"{dr2[0]} sd {dr2[1]}", staff_map[p2], staff_map[t2], "LAPORAN KERUSAKAN")
-                    if pb2: st.download_button("Download File", pb2, "Gangguan_ME.pdf")
+                    if pb2: st.download_button("Download Laporan Gangguan", pb2, f"Gangguan_{dr2[0]}.pdf")
