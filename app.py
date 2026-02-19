@@ -42,11 +42,17 @@ SOW_MASTER = {
     }
 }
 
-# --- 3. CSS CUSTOM (UI/UX MODERN) ---
+# --- 3. CSS CUSTOM (VERSI STERIL - RASA NATIVE APP) ---
 st.markdown("""
     <style>
+    /* Menghilangkan Jejak Streamlit */
+    #MainMenu {visibility: hidden;}
+    footer {visibility: hidden;}
     header {visibility: hidden;}
+    
     .stApp { background: #0f172a; }
+    
+    /* Container Header Utama */
     .main-header { 
         text-align: center; padding: 25px; background: #1e293b; 
         border: 2px solid #334155; border-radius: 15px; margin-bottom: 30px; 
@@ -54,6 +60,7 @@ st.markdown("""
     .main-header h1 { color: #38bdf8; margin: 0; font-size: 2rem; letter-spacing: 3px; font-weight: 800; }
     .main-header p { color: #94a3b8; margin: 8px 0 0 0; font-size: 0.95rem; font-style: italic; letter-spacing: 1px; }
     
+    /* Tombol Menu Grid */
     div.stButton > button { 
         width: 100%; height: 75px !important; background: #1e293b !important; 
         border: 1px solid #334155 !important; border-radius: 12px !important; 
@@ -61,9 +68,14 @@ st.markdown("""
         margin-bottom: 10px;
     }
     div.stButton > button:hover { border-color: #38bdf8 !important; background: #0f172a !important; box-shadow: 0 4px 15px rgba(56, 189, 248, 0.2); }
+    
+    /* Form & Label */
     label { color: #38bdf8 !important; font-weight: bold !important; }
-    .stTabs [data-baseweb="tab-list"] { gap: 20px; }
-    .stTabs [data-baseweb="tab"] { background-color: #1e293b; border-radius: 5px; color: white; padding: 10px 20px; }
+    .stTabs [data-baseweb="tab-list"] { gap: 15px; }
+    .stTabs [data-baseweb="tab"] { background-color: #1e293b; border-radius: 8px; color: white; padding: 10px 20px; }
+    
+    /* Optimalisasi Jarak Mobile */
+    .block-container { padding-top: 1.5rem !important; padding-bottom: 1rem !important; }
     </style>
     """, unsafe_allow_html=True)
 
@@ -75,7 +87,7 @@ st.markdown("""
     </div>
     """, unsafe_allow_html=True)
 
-# --- 5. FUNGSI PENDUKUNG (FOTO & PDF) ---
+# --- 5. FUNGSI PENDUKUNG ---
 def upload_foto(file):
     if file is not None:
         filename = f"{uuid.uuid4()}.jpg"
@@ -160,7 +172,7 @@ if st.session_state.hal == 'Menu':
             if st.button("⚠️ LAPOR GANGGUAN"): pindah('Gangguan'); st.rerun()
             if st.button("🔄 UPDATE PERBAIKAN"): pindah('Update'); st.rerun()
             if st.button("📊 STATISTIK"): pindah('Statistik'); st.rerun()
-            if st.button("ℹ️ INFO SISTEM"): st.toast("SIMANTAP ME v2.1 Platinum", icon="⚡")
+            if st.button("ℹ️ INFO SISTEM"): st.toast("SIMANTAP ME v2.2 Steril Platinum", icon="⚡")
     st.markdown("---")
     st.caption("<center>© 2026 KPwBI Balikpapan - Unit MI</center>", unsafe_allow_html=True)
 
@@ -226,7 +238,7 @@ elif st.session_state.hal in ['Harian', 'Mingguan', 'Bulanan']:
         if st.form_submit_button("💾 SIMPAN"):
             k_f = " | ".join(resp) + (f" | Catatan: {cat}" if cat else "")
             supabase.table("maintenance_logs").insert({"asset_id": opt_asset[sel_a_l]['id'], "teknisi": t, "periode": st.session_state.hal, "kondisi": kon, "keterangan": k_f}).execute()
-            st.success(f"✅ Data {nama_a} Berhasil Disimpan!"); st.toast("Checklist Terkirim!", icon="💾")
+            st.success(f"✅ Data {nama_a} Disimpan!"); st.toast("Checklist Terkirim!", icon="💾")
             if st.session_state.hal == 'Bulanan': st.balloons()
             time.sleep(1.5); st.rerun()
 
