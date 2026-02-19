@@ -4,6 +4,7 @@ import datetime
 import pandas as pd
 from fpdf import FPDF
 import uuid
+import plotly.express as px
 
 # --- 1. CONFIG & KONEKSI ---
 st.set_page_config(page_title="SIMANTAP BI BPP", layout="wide", initial_sidebar_state="collapsed")
@@ -11,7 +12,14 @@ URL = st.secrets["SUPABASE_URL"]
 KEY = st.secrets["SUPABASE_KEY"]
 supabase: Client = create_client(URL, KEY)
 
-# --- 2. CSS CUSTOM ---
+# --- 2. SOW DATA (Scope of Work) ---
+SOW_DATA = {
+    "Harian": ["Level Bahan Bakar", "Temperatur Ruangan Server", "Indikator Panel", "Kebersihan Area"],
+    "Mingguan": ["Tegangan Battery Start", "Filter Udara AC", "Tekanan Air Plumbing", "Lampu Darurat"],
+    "Bulanan": ["Uji Running Genset", "Outdoor AC", "Kekencangan Baut Panel", "Grounding System"]
+}
+
+# --- 3. CSS CUSTOM ---
 st.markdown("""
     <style>
     header {visibility: hidden;}
@@ -31,7 +39,7 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-# --- FUNGSI UPLOAD FOTO ---
+# --- FUNGSI UPLOAD ---
 def upload_foto(file):
     if file is not None:
         filename = f"{uuid.uuid4()}.jpg"
@@ -39,35 +47,36 @@ def upload_foto(file):
         try:
             supabase.storage.from_("foto_maintenance").upload(filepath, file.getvalue(), {"content-type": "image/jpeg"})
             return f"{URL}/storage/v1/object/public/foto_maintenance/{filepath}"
-        except Exception:
-            return None
+        except: return None
     return None
 
-# --- 3. FUNGSI GENERATE PDF (PERBAIKAN KORUP) ---
-def generate_pdf(df, rentang_tgl, peg_data, tek_data):
+# --- 4. FUNGSI PDF (ANTI-KORUP) ---
+def generate_pdf(df, rentang_tgl, peg_data, tek_data, judul="LAPORAN"):
     try:
         pdf = FPDF(orientation='L', unit='mm', format='A4')
         pdf.add_page()
         pdf.set_font("Helvetica", "B", 16)
-        pdf.cell(0, 10, "LAPORAN PEMELIHARAAN ME - BI BALIKPAPAN", ln=True, align="C")
+        pdf.cell(0, 10, f"{judul} ME - BI BALIKPAPAN", ln=True, align="C")
         pdf.set_font("Helvetica", "I", 10)
         pdf.cell(0, 7, f"Periode: {rentang_tgl}", ln=True, align="C")
         pdf.ln(10)
         
+        # Header Tabel
         pdf.set_font("Helvetica", "B", 9); pdf.set_fill_color(0, 173, 239); pdf.set_text_color(255, 255, 255)
         w = [55, 25, 35, 35, 127]
-        cols = ["Aset", "Jenis/Urgensi", "Teknisi", "Kondisi/Status", "Keterangan/Masalah"]
+        cols = ["Aset", "Kategori", "Teknisi", "Status/Kondisi", "Keterangan/Tindakan"]
         for i in range(len(cols)): pdf.cell(w[i], 10, cols[i], 1, 0, "C", True)
         pdf.ln()
 
+        # Isi Tabel
         pdf.set_font("Helvetica", "", 8); pdf.set_text_color(0, 0, 0)
         for _, row in df.iterrows():
-            # Pastikan data bukan None untuk mencegah PDF korup
             aset = str(row.get('Nama Aset', '-'))
-            per = str(row.get('periode', row.get('urgensi', '-')))
+            kat = str(row.get('periode', row.get('urgensi', '-')))
             tek = str(row.get('teknisi', '-'))
-            kon = str(row.get('kondisi', row.get('status', '-')))
-            ket = str(row.get('keterangan', row.get('masalah', '-')))
+            stts = str(row.get('kondisi', row.get('status', '-')))
+            # Jika ada tindakan perbaikan, tampilkan juga
+            ket = str(row.get('keterangan', row.get('tindakan_perbaikan', row.get('masalah', '-'))))
 
             start_y = pdf.get_y()
             pdf.multi_cell(w[0], 10, aset, 1, 'L')
@@ -77,15 +86,12 @@ def generate_pdf(df, rentang_tgl, peg_data, tek_data):
             y_detail = pdf.get_y()
             max_h = max(y_aset, y_detail) - start_y
             
-            pdf.rect(10, start_y, w[0], max_h)
-            pdf.rect(10+w[0], start_y, w[1], max_h)
-            pdf.rect(10+w[0]+w[1], start_y, w[2], max_h)
-            pdf.rect(10+w[0]+w[1]+w[2], start_y, w[3], max_h)
-            
+            pdf.rect(10, start_y, w[0], max_h); pdf.rect(10+w[0], start_y, w[1], max_h)
+            pdf.rect(10+w[0]+w[1], start_y, w[2], max_h); pdf.rect(10+w[0]+w[1]+w[2], start_y, w[3], max_h)
             pdf.set_xy(10+w[0], start_y)
-            pdf.cell(w[1], max_h, per, 0, 0, "C")
+            pdf.cell(w[1], max_h, kat, 0, 0, "C")
             pdf.cell(w[2], max_h, tek, 0, 0, "C")
-            pdf.cell(w[3], max_h, kon, 0, 0, "C")
+            pdf.cell(w[3], max_h, stts, 0, 0, "C")
             pdf.set_y(start_y + max_h)
             if pdf.get_y() > 170: pdf.add_page()
         
@@ -99,11 +105,9 @@ def generate_pdf(df, rentang_tgl, peg_data, tek_data):
         pdf.set_font("Helvetica", "", 9)
         pdf.cell(138, 5, str(peg_data.get('jabatan_pdf', '')), 0, 0, "C"); pdf.cell(138, 5, "Teknisi ME", 0, 1, "C")
         return pdf.output(dest='S').encode('latin-1')
-    except Exception as e:
-        st.error(f"Gagal membuat PDF: {e}")
-        return None
+    except: return None
 
-# --- 4. DATA NAVIGASI ---
+# --- 5. SETUP DATA ---
 if 'hal' not in st.session_state: st.session_state.hal = 'Menu'
 def pindah(n): st.session_state.hal = n
 
@@ -121,7 +125,7 @@ list_peg = [s['nama'] for s in staff_list if s['kategori'] == 'PEGAWAI']
 
 st.markdown('<div class="main-header"><h1>⚡ SIMANTAP BI BALIKPAPAN</h1></div>', unsafe_allow_html=True)
 
-# --- 5. ROUTING HALAMAN ---
+# --- 6. ROUTING HALAMAN ---
 if st.session_state.hal == 'Menu':
     c1, mid, c2 = st.columns([1, 0.2, 1])
     with c1:
@@ -132,24 +136,35 @@ if st.session_state.hal == 'Menu':
     with c2:
         if st.button("⚠️ LAPOR GANGGUAN"): pindah('Gangguan'); st.rerun()
         if st.button("🔄 UPDATE PERBAIKAN"): pindah('Update'); st.rerun()
+        if st.button("📊 STATISTIK"): pindah('Statistik'); st.rerun()
+
+elif st.session_state.hal == 'Statistik':
+    if st.button("⬅️ KEMBALI"): pindah('Menu'); st.rerun()
+    df_g = pd.DataFrame(supabase.table("gangguan_logs").select("*").execute().data)
+    if not df_g.empty:
+        c1, c2, c3 = st.columns(3)
+        c1.metric("Total Laporan", len(df_g))
+        c2.metric("Masih Rusak (Open)", len(df_g[df_g['status'] == 'Open']))
+        c3.metric("Sudah OK (Closed)", len(df_g[df_g['status'] == 'Closed']))
+        st.plotly_chart(px.pie(df_g, names='status', title="Persentase Penyelesaian", hole=0.4))
+    else: st.info("Data belum tersedia.")
 
 elif st.session_state.hal == 'Gangguan':
     if st.button("⬅️ KEMBALI"): pindah('Menu'); st.rerun()
-    st.subheader("⚠️ Lapor Gangguan / Kerusakan")
-    sel_a = st.selectbox("Pilih Aset", list(opt_asset.keys()))
-    t = st.selectbox("Teknisi Pelapor", list_tek)
-    urg = st.selectbox("Urgensi", ["Sedang", "Mendesak", "Darurat"])
-    masalah = st.text_area("Deskripsi Kerusakan")
-    foto_g = st.camera_input("Foto Kerusakan", key="cam_g")
-    foto_file = st.file_uploader("Atau Upload", type=['jpg', 'jpeg', 'png'])
-    if st.button("KIRIM LAPORAN"):
-        if masalah:
-            url_foto = upload_foto(foto_g if foto_g else foto_file)
+    st.subheader("⚠️ Lapor Gangguan Baru")
+    with st.form("f_gangguan"):
+        sel_a = st.selectbox("Aset", list(opt_asset.keys()))
+        t = st.selectbox("Pelapor", list_tek)
+        urg = st.selectbox("Urgensi", ["Sedang", "Mendesak", "Darurat"])
+        masalah = st.text_area("Deskripsi Kerusakan")
+        foto = st.camera_input("Foto Kerusakan")
+        if st.form_submit_button("KIRIM LAPORAN"):
+            url = upload_foto(foto)
             supabase.table("gangguan_logs").insert({
                 "asset_id": opt_asset[sel_a]['id'], "teknisi": t, 
-                "masalah": masalah, "urgensi": urg, "status": "Open", "foto_kerusakan_url": url_foto
+                "masalah": masalah, "urgensi": urg, "status": "Open", "foto_kerusakan_url": url
             }).execute()
-            st.success("Laporan Terkirim!"); st.rerun()
+            st.success("Terkirim!"); st.rerun()
 
 elif st.session_state.hal == 'Update':
     if st.button("⬅️ KEMBALI"): pindah('Menu'); st.rerun()
@@ -157,69 +172,70 @@ elif st.session_state.hal == 'Update':
     data_g = supabase.table("gangguan_logs").select("*, assets(nama_aset)").eq("status", "Open").execute().data
     if data_g:
         for g in data_g:
-            with st.expander(f"🔴 {g['assets']['nama_aset']}"):
+            with st.expander(f"🔴 {g['assets']['nama_aset']} ({g['urgensi']})"):
                 st.write(f"Masalah: {g['masalah']}")
-                t_perbaikan = st.selectbox("Teknisi Perbaikan", list_tek, key=f"t_{g['id']}")
-                tindakan = st.text_input("Tindakan Perbaikan", key=f"ind_{g['id']}")
-                if st.button("Update Selesai", key=f"btn_{g['id']}"):
-                    supabase.table("gangguan_logs").update({
-                        "status": "Closed", "tindakan_perbaikan": tindakan, 
-                        "teknisi_perbaikan": t_perbaikan, "tgl_perbaikan": datetime.datetime.now().isoformat()
-                    }).eq("id", g['id']).execute()
-                    st.success("Selesai!"); st.rerun()
-    else: st.info("Tidak ada gangguan aktif.")
-
-elif st.session_state.hal == 'Export':
-    if st.button("⬅️ KEMBALI"): pindah('Menu'); st.rerun()
-    st.subheader("📊 Export Laporan PDF")
-    
-    tab1, tab2 = st.tabs(["Log Checklist", "Log Gangguan"])
-    
-    with tab1:
-        logs = supabase.table("maintenance_logs").select("*, assets(nama_aset)").order("created_at", desc=True).execute().data
-        if logs:
-            df = pd.DataFrame(logs)
-            df['Nama Aset'] = df['assets'].apply(lambda x: x['nama_aset'] if x else "N/A")
-            tgl_r = st.date_input("Rentang Tanggal Checklist", [datetime.date.today(), datetime.date.today()], key="tgl_check")
-            if len(tgl_r) == 2:
-                df_f = df[(pd.to_datetime(df['created_at']).dt.date >= tgl_r[0]) & (pd.to_datetime(df['created_at']).dt.date <= tgl_r[1])]
-                st.dataframe(df_f[['Nama Aset', 'periode', 'teknisi', 'kondisi', 'created_at']], use_container_width=True)
-                p_sel = st.selectbox("Diketahui (BI)", list_peg, key="p1")
-                t_sel = st.selectbox("Dibuat (Teknisi)", list_tek, key="t1")
-                if st.button("DOWNLOAD PDF CHECKLIST"):
-                    pdf_bytes = generate_pdf(df_f, f"{tgl_r[0]} s/d {tgl_r[1]}", staff_map[p_sel], staff_map[t_sel])
-                    if pdf_bytes:
-                        st.download_button("Klik Disini Untuk Unduh", data=pdf_bytes, file_name="Log_Checklist.pdf", mime="application/pdf")
-        else: st.info("Belum ada data checklist.")
-
-    with tab2:
-        g_logs = supabase.table("gangguan_logs").select("*, assets(nama_aset)").order("created_at", desc=True).execute().data
-        if g_logs:
-            df_g = pd.DataFrame(g_logs)
-            df_g['Nama Aset'] = df_g['assets'].apply(lambda x: x['nama_aset'] if x else "N/A")
-            tgl_rg = st.date_input("Rentang Tanggal Gangguan", [datetime.date.today(), datetime.date.today()], key="tgl_gang")
-            if len(tgl_rg) == 2:
-                df_gf = df_g[(pd.to_datetime(df_g['created_at']).dt.date >= tgl_rg[0]) & (pd.to_datetime(df_g['created_at']).dt.date <= tgl_rg[1])]
-                st.dataframe(df_gf[['Nama Aset', 'urgensi', 'teknisi', 'status', 'masalah', 'created_at']], use_container_width=True)
-                p_sel_g = st.selectbox("Diketahui (BI)", list_peg, key="p2")
-                t_sel_g = st.selectbox("Dibuat (Teknisi)", list_tek, key="t2")
-                if st.button("DOWNLOAD PDF GANGGUAN"):
-                    pdf_bytes_g = generate_pdf(df_gf, f"{tgl_rg[0]} s/d {tgl_rg[1]}", staff_map[p_sel_g], staff_map[t_sel_g])
-                    if pdf_bytes_g:
-                        st.download_button("Klik Disini Untuk Unduh", data=pdf_bytes_g, file_name="Log_Gangguan.pdf", mime="application/pdf")
-        else: st.info("Belum ada data gangguan.")
+                t_per = st.selectbox("Teknisi Perbaikan", list_tek, key=f"tk_{g['id']}")
+                tindakan = st.text_area("Tindakan yang dilakukan", key=f"tnd_{g['id']}")
+                foto_after = st.camera_input("Foto Sesudah Perbaikan", key=f"aft_{g['id']}")
+                if st.button("Simpan & Tutup Laporan", key=f"btn_{g['id']}"):
+                    if tindakan:
+                        url_a = upload_foto(foto_after)
+                        supabase.table("gangguan_logs").update({
+                            "status": "Closed", "tindakan_perbaikan": tindakan, 
+                            "teknisi_perbaikan": t_per, "tgl_perbaikan": datetime.datetime.now().isoformat(),
+                            "foto_setelah_perbaikan_url": url_a
+                        }).eq("id", g['id']).execute()
+                        st.success("Status Diperbarui!"); st.rerun()
+                    else: st.warning("Isi tindakan perbaikan.")
+    else: st.info("Tidak ada laporan kerusakan yang aktif.")
 
 elif st.session_state.hal in ['Harian', 'Mingguan', 'Bulanan']:
     if st.button("⬅️ KEMBALI"): pindah('Menu'); st.rerun()
-    st.subheader(f"Form {st.session_state.hal}")
-    with st.form("f_m"):
+    st.subheader(f"📋 Checklist {st.session_state.hal}")
+    with st.form("f_chk"):
         sel_a = st.selectbox("Aset", list(opt_asset.keys()))
         t = st.selectbox("Teknisi", list_tek)
-        kon = st.radio("Kondisi", ["Sangat Baik", "Baik", "Perlu Perbaikan", "Rusak"], index=1)
-        ket = st.text_area("Keterangan")
+        st.write("**Poin Pemeriksaan SOW:**")
+        resp = []
+        for i, item in enumerate(SOW_DATA[st.session_state.hal]):
+            r = st.radio(f"{item}", ["Normal", "Tidak Normal", "N/A"], horizontal=True, key=f"s_{i}")
+            resp.append(f"{item}: {r}")
+        kon = st.radio("Kondisi Akhir", ["Sangat Baik", "Baik", "Perlu Perbaikan", "Rusak"], index=1)
+        catatan = st.text_area("Catatan Tambahan")
         if st.form_submit_button("SIMPAN"):
+            ket_final = " | ".join(resp) + (f" | Catatan: {catatan}" if catatan else "")
             supabase.table("maintenance_logs").insert({
                 "asset_id": opt_asset[sel_a]['id'], "teknisi": t, 
-                "periode": st.session_state.hal, "kondisi": kon, "keterangan": ket
+                "periode": st.session_state.hal, "kondisi": kon, "keterangan": ket_final
             }).execute()
             st.success("Tersimpan!"); st.rerun()
+
+elif st.session_state.hal == 'Export':
+    if st.button("⬅️ KEMBALI"): pindah('Menu'); st.rerun()
+    st.subheader("📊 Export Laporan")
+    t1, t2 = st.tabs(["📑 Log Checklist (H/M/B)", "⚠️ Log Kerusakan & Perbaikan"])
+    
+    with t1:
+        res = supabase.table("maintenance_logs").select("*, assets(nama_aset)").order("created_at", desc=True).execute().data
+        if res:
+            df1 = pd.DataFrame(res); df1['Nama Aset'] = df1['assets'].apply(lambda x: x['nama_aset'] if x else "N/A")
+            dr1 = st.date_input("Filter Tanggal Checklist", [datetime.date.today(), datetime.date.today()], key="dr1")
+            if len(dr1) == 2:
+                df1f = df1[(pd.to_datetime(df1['created_at']).dt.date >= dr1[0]) & (pd.to_datetime(df1['created_at']).dt.date <= dr1[1])]
+                st.dataframe(df1f[['Nama Aset', 'periode', 'teknisi', 'kondisi', 'created_at']], use_container_width=True)
+                p, t = st.selectbox("Pilih Pejabat BI", list_peg, key="p1"), st.selectbox("Pilih Teknisi PJ", list_tek, key="t1")
+                if st.button("CETAK PDF CHECKLIST"):
+                    pb = generate_pdf(df1f, f"{dr1[0]} sd {dr1[1]}", staff_map[p], staff_map[t], "LAPORAN CHECKLIST")
+                    if pb: st.download_button("Klik untuk Download", pb, "Checklist.pdf", "application/pdf")
+    with t2:
+        res2 = supabase.table("gangguan_logs").select("*, assets(nama_aset)").order("created_at", desc=True).execute().data
+        if res2:
+            df2 = pd.DataFrame(res2); df2['Nama Aset'] = df2['assets'].apply(lambda x: x['nama_aset'] if x else "N/A")
+            dr2 = st.date_input("Filter Tanggal Kerusakan", [datetime.date.today(), datetime.date.today()], key="dr2")
+            if len(dr2) == 2:
+                df2f = df2[(pd.to_datetime(df2['created_at']).dt.date >= dr2[0]) & (pd.to_datetime(df2['created_at']).dt.date <= dr2[1])]
+                st.dataframe(df2f[['Nama Aset', 'urgensi', 'teknisi', 'status', 'tindakan_perbaikan']], use_container_width=True)
+                p2, t2 = st.selectbox("Pilih Pejabat BI", list_peg, key="p2"), st.selectbox("Pilih Teknisi PJ", list_tek, key="t2")
+                if st.button("CETAK PDF GANGGUAN"):
+                    pb2 = generate_pdf(df2f, f"{dr2[0]} sd {dr2[1]}", staff_map[p2], staff_map[t2], "LAPORAN KERUSAKAN")
+                    if pb2: st.download_button("Klik untuk Download", pb2, "Laporan_Gangguan.pdf", "application/pdf")
