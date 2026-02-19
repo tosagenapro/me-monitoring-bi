@@ -10,7 +10,7 @@ URL = st.secrets["SUPABASE_URL"]
 KEY = st.secrets["SUPABASE_KEY"]
 supabase: Client = create_client(URL, KEY)
 
-# --- 2. CSS CYBER NEON (FIX BUTTON & LAYOUT) ---
+# --- 2. CSS STABIL (TOMBOL BISA DIKLIK) ---
 st.markdown("""
     <style>
     header {visibility: hidden;}
@@ -26,64 +26,36 @@ st.markdown("""
         box-shadow: 0 0 15px rgba(56, 189, 248, 0.2);
         margin-bottom: 30px; border-radius: 0 0 20px 20px;
     }
-    .main-header h1 { color: #f8fafc; text-shadow: 0 0 12px #38bdf8; margin: 0; font-size: 2.2rem; }
+    .main-header h1 { color: #f8fafc; text-shadow: 0 0 12px #38bdf8; margin: 0; font-size: 2rem; }
 
-    /* Container Kartu Menu Utama */
-    .menu-wrapper {
-        position: relative;
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        justify-content: center;
-        height: 180px;
-        width: 100%;
-        border-radius: 20px;
-        background: rgba(255, 255, 255, 0.03);
-        border: 1px solid rgba(56, 189, 248, 0.2);
-        transition: 0.3s;
-        margin-bottom: 25px;
-        overflow: hidden;
-    }
-
-    /* Memaksa Tombol Menutupi Seluruh Kartu agar Ikon Bisa Diklik */
+    /* Tombol Menu Utama - Dibuat Stabil */
     div.stButton > button {
-        position: absolute;
-        top: 0; left: 0;
-        width: 100% !important;
+        width: 100%;
         height: 180px !important;
-        background-color: transparent !important;
-        color: transparent !important; 
-        border: none !important;
-        z-index: 10;
-        cursor: pointer;
+        background: rgba(255, 255, 255, 0.05) !important;
+        border: 1px solid rgba(56, 189, 248, 0.3) !important;
+        border-radius: 20px !important;
+        color: #38bdf8 !important;
+        font-weight: bold !important;
+        font-size: 1rem !important;
+        transition: 0.3s !important;
+        display: flex !important;
+        flex-direction: column !important;
+        align-items: center !important;
+        justify-content: center !important;
+        gap: 15px !important;
     }
-
-    .menu-wrapper:hover {
-        background: rgba(56, 189, 248, 0.1);
-        border: 1px solid #38bdf8;
-        box-shadow: 0 0 20px rgba(56, 189, 248, 0.3);
+    
+    div.stButton > button:hover {
+        background: rgba(56, 189, 248, 0.15) !important;
+        border: 1px solid #38bdf8 !important;
+        box-shadow: 0 0 20px rgba(56, 189, 248, 0.4) !important;
         transform: translateY(-5px);
     }
 
-    /* Konten di Dalam Kartu */
-    .btn-content {
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        z-index: 1;
-    }
-    .btn-text {
-        font-weight: 700; color: #38bdf8; font-size: 0.85rem;
-        margin-top: 15px; letter-spacing: 1px;
-        text-shadow: 0 0 8px rgba(56, 189, 248, 0.5);
-        text-transform: uppercase;
-        text-align: center;
-    }
-
-    /* Styling Form Input */
+    /* Form Input agar kontras */
     label { color: #38bdf8 !important; font-weight: bold !important; }
-    .stSelectbox, .stTextInput, .stTextArea, .stRadio { color: white !important; }
-    .stMarkdown p { color: #cbd5e1; }
+    .stSelectbox, .stTextInput, .stTextArea { background-color: rgba(255,255,255,0.05) !important; color: white !important; }
     </style>
     """, unsafe_allow_html=True)
 
@@ -129,22 +101,6 @@ def generate_pdf(df, tgl, p_sel, t_sel):
     pdf.cell(138, 5, f"Dibuat Oleh: {t_sel}", 0, 1, "C")
     return bytes(pdf.output())
 
-def render_sow(nama):
-    st.info(f"📋 Parameter SOW: {nama}")
-    ck = {}
-    if "AC" in nama:
-        ck['Filter'] = st.radio("Filter/Evap", ["Bersih", "Kotor"])
-        ck['Drainase'] = st.radio("Drainase", ["Lancar", "Sumbat"])
-    elif "Genset" in nama:
-        ck['Oli'] = st.radio("Level Oli", ["Cukup", "Kurang"])
-        ck['Accu'] = st.radio("Tegangan Accu", ["Normal", "Lemah"])
-    elif "Chiller" in nama:
-        ck['Arus'] = st.text_input("Arus (Ampere)")
-        ck['Valve'] = st.radio("Kondisi Valve", ["OK", "Rusak"])
-    else:
-        ck['Fisik'] = st.radio("Kondisi Fisik", ["OK", "Bermasalah"])
-    return ck
-
 # --- 4. NAVIGASI ---
 if 'halaman' not in st.session_state: st.session_state.halaman = 'Menu Utama'
 def ganti_hal(nama): st.session_state.halaman = nama
@@ -157,57 +113,48 @@ list_tek = [s['nama'] for s in staff_data if s['kategori'] == 'TEKNISI']
 list_peg = [s['nama'] for s in staff_data if s['kategori'] == 'PEGAWAI']
 
 # --- 6. HEADER ---
-st.markdown('<div class="main-header"><h1>⚡ SIMANTAP BI</h1><p style="color:#38bdf8; letter-spacing:2px; font-size:0.8rem;">INTEGRATED DIGITAL MAINTENANCE</p></div>', unsafe_allow_html=True)
+st.markdown('<div class="main-header"><h1>⚡ SIMANTAP BI</h1><p style="color:#38bdf8; font-size:0.8rem;">INTEGRATED DIGITAL MAINTENANCE</p></div>', unsafe_allow_html=True)
 
-# --- 7. LOGIKA HALAMAN ---
+# --- 7. MENU UTAMA ---
 if st.session_state.halaman == 'Menu Utama':
-    _, col_menu, _ = st.columns([0.05, 0.9, 0.05])
-    with col_menu:
-        m1, m2 = st.columns(2)
-        with m1:
-            st.markdown('<div class="menu-wrapper"><div class="btn-content"><img src="https://img.icons8.com/neon/96/checklist.png" width="70"><div class="btn-text">Checklist Rutin</div></div>', unsafe_allow_html=True)
-            if st.button(" ", key="m1"): ganti_hal('Rutin'); st.rerun()
-            st.markdown('</div>', unsafe_allow_html=True)
-            
-            st.markdown('<div class="menu-wrapper"><div class="btn-content"><img src="https://img.icons8.com/neon/96/refresh.png" width="70"><div class="btn-text">Update Perbaikan</div></div>', unsafe_allow_html=True)
-            if st.button(" ", key="m2"): ganti_hal('Update'); st.rerun()
-            st.markdown('</div>', unsafe_allow_html=True)
+    col1, col2 = st.columns(2)
+    with col1:
+        if st.button("📋 CHECKLIST RUTIN", key="m1"): ganti_hal('Rutin'); st.rerun()
+        st.write("##")
+        if st.button("🔄 UPDATE PERBAIKAN", key="m2"): ganti_hal('Update'); st.rerun()
+    with col2:
+        if st.button("⚠️ LAPOR GANGGUAN", key="m3"): ganti_hal('Gangguan'); st.rerun()
+        st.write("##")
+        if st.button("📊 DASHBOARD & PDF", key="m4"): ganti_hal('Export'); st.rerun()
 
-        with m2:
-            st.markdown('<div class="menu-wrapper"><div class="btn-content"><img src="https://img.icons8.com/neon/96/error.png" width="70"><div class="btn-text">Lapor Gangguan</div></div>', unsafe_allow_html=True)
-            if st.button(" ", key="m3"): ganti_hal('Gangguan'); st.rerun()
-            st.markdown('</div>', unsafe_allow_html=True)
-
-            st.markdown('<div class="menu-wrapper"><div class="btn-content"><img src="https://img.icons8.com/neon/96/combo-chart.png" width="70"><div class="btn-text">Dashboard & PDF</div></div>', unsafe_allow_html=True)
-            if st.button(" ", key="m4"): ganti_hal('Export'); st.rerun()
-            st.markdown('</div>', unsafe_allow_html=True)
-
+# --- 8. HALAMAN MODUL ---
 else:
-    if st.button("⬅️ KEMBALI KE MENU UTAMA"): ganti_hal('Menu Utama'); st.rerun()
+    if st.button("⬅️ KEMBALI KE MENU"): ganti_hal('Menu Utama'); st.rerun()
     st.write("---")
 
-    # MODUL 1: CHECKLIST RUTIN
     if st.session_state.halaman == 'Rutin':
         st.subheader("📋 Form Checklist Rutin")
         sel = st.selectbox("Pilih Aset", list(opt_asset.keys()))
         aset = opt_asset[sel]
         with st.form("f_rutin", clear_on_submit=True):
             t = st.selectbox("Teknisi", list_tek)
-            sow_res = render_sow(aset['nama_aset'])
+            # SOW Sederhana agar tidak berat
             kon = st.radio("Kondisi Akhir", ["Sangat Baik", "Baik", "Perlu Perbaikan", "Rusak"], index=1)
-            ket = st.text_area("Keterangan Tambahan")
+            ket = st.text_area("Keterangan")
+            
+            # --- CHECKBOX KAMERA KEMBALI ---
             pake_cam = st.checkbox("📸 Aktifkan Kamera")
             foto = st.camera_input("Ambil Foto") if pake_cam else None
+            
             if st.form_submit_button("SIMPAN DATA"):
                 url = None
                 if foto:
                     fn = f"R_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}.jpg"
                     supabase.storage.from_("FOTO_MAINTENANCE").upload(fn, foto.getvalue())
                     url = supabase.storage.from_("FOTO_MAINTENANCE").get_public_url(fn)
-                supabase.table("maintenance_logs").insert({"asset_id": aset['id'], "teknisi": t, "kondisi": kon, "keterangan": ket, "foto_url": url, "checklist_data": sow_res}).execute()
-                st.success("Berhasil Disimpan!"); st.balloons()
+                supabase.table("maintenance_logs").insert({"asset_id": aset['id'], "teknisi": t, "kondisi": kon, "keterangan": ket, "foto_url": url}).execute()
+                st.success("Tersimpan!"); st.balloons()
 
-    # MODUL 2: LAPOR GANGGUAN
     elif st.session_state.halaman == 'Gangguan':
         st.subheader("⚠️ Lapor Kerusakan")
         sel_g = st.selectbox("Aset Bermasalah", list(opt_asset.keys()))
@@ -215,7 +162,6 @@ else:
         with st.form("f_gng", clear_on_submit=True):
             pel = st.selectbox("Pelapor", list_tek)
             mas = st.text_area("Deskripsi Kerusakan")
-            urg = st.select_slider("Urgensi", ["Rendah", "Sedang", "Darurat"], value="Sedang")
             pake_cam_g = st.checkbox("📸 Aktifkan Kamera")
             foto_g = st.camera_input("Foto") if pake_cam_g else None
             if st.form_submit_button("KIRIM LAPORAN"):
@@ -224,51 +170,43 @@ else:
                     fn_g = f"G_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}.jpg"
                     supabase.storage.from_("FOTO_MAINTENANCE").upload(fn_g, foto_g.getvalue())
                     url_g = supabase.storage.from_("FOTO_MAINTENANCE").get_public_url(fn_g)
-                supabase.table("gangguan_logs").insert({"asset_id": aset_g['id'], "teknisi": pel, "masalah": mas, "urgensi": urg, "status": "Open", "foto_kerusakan_url": url_g}).execute()
-                st.error("Laporan Terkirim!")
+                supabase.table("gangguan_logs").insert({"asset_id": aset_g['id'], "teknisi": pel, "masalah": mas, "status": "Open", "foto_kerusakan_url": url_g}).execute()
+                st.error("Laporan Dikirim!")
 
-    # MODUL 3: UPDATE PERBAIKAN
     elif st.session_state.halaman == 'Update':
         st.subheader("✅ Update Penyelesaian")
         iss = get_open_issues()
         if not iss: st.info("Tidak ada gangguan aktif.")
         else:
-            iss_opt = {f"[{i['urgensi']}] {i['assets']['nama_aset']} - {i['masalah'][:30]}": i for i in iss}
-            sel_i = st.selectbox("Pilih Gangguan", list(iss_opt.keys()))
+            iss_opt = {f"{i['assets']['nama_aset']} - {i['masalah'][:30]}": i for i in iss}
+            sel_i = st.selectbox("Pilih Laporan", list(iss_opt.keys()))
             dat_i = iss_opt[sel_i]
             with st.form("f_fix"):
                 tp = st.selectbox("Teknisi Pelaksana", list_tek)
-                tin = st.text_area("Tindakan Perbaikan")
-                pake_cam_f = st.checkbox("📸 Aktifkan Kamera (After)")
+                tin = st.text_area("Tindakan")
+                pake_cam_f = st.checkbox("📸 Aktifkan Kamera")
                 f_a = st.camera_input("Foto After") if pake_cam_f else None
-                if st.form_submit_button("SELESAI / RESOLVED"):
+                if st.form_submit_button("SELESAI"):
                     url_a = None
                     if f_a:
                         fn_a = f"F_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}.jpg"
                         supabase.storage.from_("FOTO_MAINTENANCE").upload(fn_a, f_a.getvalue())
                         url_a = supabase.storage.from_("FOTO_MAINTENANCE").get_public_url(fn_a)
-                    supabase.table("gangguan_logs").update({"status": "Resolved", "tindakan_perbaikan": tin, "teknisi_perbaikan": tp, "tgl_perbaikan": datetime.datetime.now().isoformat(), "foto_setelah_perbaikan_url": url_a}).eq("id", dat_i['id']).execute()
-                    st.success("Status Berhasil Diupdate!")
+                    supabase.table("gangguan_logs").update({"status": "Resolved", "tindakan_perbaikan": tin, "teknisi_perbaikan": tp, "foto_setelah_perbaikan_url": url_a}).eq("id", dat_i['id']).execute()
+                    st.success("Selesai!")
 
-    # MODUL 4: DASHBOARD & EXPORT PDF
     elif st.session_state.halaman == 'Export':
-        st.subheader("📊 Monitoring & PDF")
+        st.subheader("📊 Dashboard & Export PDF")
         logs = get_all_logs()
         if logs:
             df = pd.DataFrame(logs)
-            df['Nama Aset'] = df['assets'].apply(lambda x: x['nama_aset'])
+            df['Nama Aset'] = df['assets'].apply(lambda x: x['nama_aset'] if x else "N/A")
             df['Tanggal'] = pd.to_datetime(df['created_at']).dt.date
-            st.metric("Total Laporan", len(df))
-            dp = st.date_input("Filter Tanggal", datetime.date.today())
+            dp = st.date_input("Pilih Tanggal", datetime.date.today())
             df_f = df[df['Tanggal'] == dp].copy()
-            if not df_f.empty:
-                c_df = pd.json_normalize(df_f['checklist_data'])
-                df_fin = pd.concat([df_f[['Nama Aset', 'teknisi', 'kondisi']].reset_index(drop=True), c_df.reset_index(drop=True)], axis=1)
-                for k in ["OK", "Bersih", "Lancar", "Normal", "Cukup", "Ya"]: df_fin = df_fin.replace(k, "v")
-                st.dataframe(df_fin.fillna("-"), use_container_width=True)
-                
-                n_bi = st.selectbox("Mengetahui (BI)", list_peg)
-                n_tk = st.selectbox("Dibuat (ME)", list_tek)
-                if st.download_button("📥 DOWNLOAD PDF", generate_pdf(df_fin.fillna("-"), dp, n_bi, n_tk), f"Lap_{dp}.pdf", "application/pdf"):
-                    st.success("PDF Diunduh")
-            else: st.warning("Data kosong pada tanggal ini.")
+            st.dataframe(df_f[['Nama Aset', 'teknisi', 'kondisi', 'keterangan']], use_container_width=True)
+            
+            n_bi = st.selectbox("Mengetahui (BI)", list_peg)
+            n_tk = st.selectbox("Dibuat (ME)", list_tek)
+            if st.download_button("📥 DOWNLOAD PDF", generate_pdf(df_f, dp, n_bi, n_tk), f"Lap_{dp}.pdf"):
+                st.success("PDF Berhasil Dibuat")
