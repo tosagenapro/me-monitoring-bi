@@ -162,7 +162,7 @@ if st.session_state.hal == 'Menu':
             if st.button("📊 STATISTIK"): pindah('Statistik'); st.rerun()
             if st.button("ℹ️ INFO SISTEM"): st.toast("SIMANTAP ME v2.1 Platinum", icon="⚡")
     st.markdown("---")
-    st.caption("<center>© 2026 ME Balikpapan - CV. Indo Mega Jaya</center>", unsafe_allow_html=True)
+    st.caption("<center>© 2026 KPwBI Balikpapan - Unit MI</center>", unsafe_allow_html=True)
 
 elif st.session_state.hal == 'Statistik':
     if st.button("⬅️ KEMBALI"): pindah('Menu'); st.rerun()
