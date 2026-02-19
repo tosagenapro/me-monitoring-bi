@@ -31,7 +31,7 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-# --- FUNGSI UPLOAD FOTO (Bucket: foto_maintenance, Folder: public) ---
+# --- FUNGSI UPLOAD FOTO ---
 def upload_foto(file):
     if file is not None:
         filename = f"{uuid.uuid4()}.jpg"
@@ -39,7 +39,7 @@ def upload_foto(file):
         try:
             supabase.storage.from_("foto_maintenance").upload(filepath, file.getvalue(), {"content-type": "image/jpeg"})
             return f"{URL}/storage/v1/object/public/foto_maintenance/{filepath}"
-        except Exception as e:
+        except Exception:
             return None
     return None
 
@@ -77,7 +77,7 @@ def generate_pdf(df, rentang_tgl, peg_data, tek_data):
         pdf.set_y(start_y + max_h)
         if pdf.get_y() > 170: pdf.add_page()
 
-    # --- TANDA TANGAN (Sesuai Aturan: Known, Position, Name Underlined, Jabatan_pdf) ---
+    # Footer Tanda Tangan (Format Pak Dani)
     pdf.ln(15); pdf.set_font("Helvetica", "", 10)
     pdf.cell(138, 5, "Diketahui,", 0, 0, "C"); pdf.cell(138, 5, "Dibuat oleh,", 0, 1, "C")
     pdf.cell(138, 5, str(peg_data.get('posisi', '')), 0, 0, "C"); pdf.cell(138, 5, "CV. INDO MEGA JAYA", 0, 1, "C")
@@ -88,7 +88,7 @@ def generate_pdf(df, rentang_tgl, peg_data, tek_data):
     pdf.cell(138, 5, str(peg_data.get('jabatan_pdf', '')), 0, 0, "C"); pdf.cell(138, 5, "Teknisi ME", 0, 1, "C")
     return pdf.output()
 
-# --- 4. DATA & NAVIGASI ---
+# --- 4. DATA NAVIGASI ---
 if 'hal' not in st.session_state: st.session_state.hal = 'Menu'
 def pindah(n): st.session_state.hal = n
 
@@ -125,26 +125,32 @@ elif st.session_state.hal == 'Gangguan':
     t = st.selectbox("Pelapor (Teknisi)", list_tek)
     masalah = st.text_area("Deskripsi Kerusakan")
     
-    # Kamera & Backup File
-    foto_g = st.camera_input("Ambil Foto (Jika kamera aktif)", key="cam_gangguan")
-    foto_file = st.file_uploader("Atau Pilih Foto dari Galeri", type=['jpg', 'jpeg', 'png'], key="file_gangguan")
+    foto_g = st.camera_input("Ambil Foto", key="cam_gangguan")
+    foto_file = st.file_uploader("Atau Upload dari Galeri", type=['jpg', 'jpeg', 'png'])
     
     if st.button("KIRIM LAPORAN"):
         if masalah:
-            with st.spinner("Sedang mengirim laporan..."):
+            with st.spinner("Sedang memproses..."):
                 final_foto = foto_g if foto_g else foto_file
-                url_foto = upload_foto(final_foto) if final_foto else None
+                url_foto = upload_foto(final_foto)
                 
-                # DISINKRONKAN DENGAN NAMA KOLOM TABEL BAPAK
-                res = supabase.table("gangguan_logs").insert({
-                    "asset_id": opt_asset[sel_a]['id'], 
-                    "pelapor": t, 
-                    "masalah": masalah, 
-                    "status": "Open", 
-                    "foto_kerusakan_url": url_foto  # Nama kolom sudah sesuai foto tabel Bapak
-                }).execute()
+                # DATA YANG DIKIRIM KE SUPABASE
+                # Saya tambahkan datetime otomatis agar kolom tanggal terisi
+                data_laporan = {
+                    "asset_id": opt_asset[sel_a]['id'],
+                    "pelapor": t,
+                    "masalah": masalah,
+                    "status": "Open",
+                    "foto_kerusakan_url": url_foto,
+                    "created_at": datetime.datetime.now().isoformat() # Tanggal otomatis
+                }
                 
-                st.success("Laporan Berhasil Terkirim!"); st.balloons(); st.rerun()
+                try:
+                    supabase.table("gangguan_logs").insert(data_laporan).execute()
+                    st.success("Laporan Berhasil Terkirim!"); st.balloons(); st.rerun()
+                except Exception as e:
+                    st.error("Gagal Simpan!")
+                    st.write("Detail Error (Cek Nama Kolom):", e)
         else: st.warning("Mohon isi deskripsi kerusakan.")
 
 elif st.session_state.hal == 'Update':
@@ -155,27 +161,16 @@ elif st.session_state.hal == 'Update':
         for g in data_g:
             with st.expander(f"🔴 {g['assets']['nama_aset']} - {g['created_at'][:10]}"):
                 st.write(f"**Masalah:** {g['masalah']}")
-                # Menampilkan foto kerusakan jika ada
-                if g.get('foto_kerusakan_url'): 
-                    st.image(g['foto_kerusakan_url'], caption="Foto Kerusakan", width=300)
-                
-                tindakan = st.text_input("Tindakan Perbaikan", key=f"tindakan_{g['id']}")
-                
-                if st.button(f"Selesai Diperbaiki", key=f"btn_{g['id']}"):
-                    if tindakan:
-                        supabase.table("gangguan_logs").update({
-                            "status": "Closed",
-                            "tindakan_perbaikan": tindakan,
-                            "tgl_perbaikan": datetime.datetime.now().isoformat()
-                        }).eq("id", g['id']).execute()
-                        st.success("Status Diperbarui!"); st.rerun()
-                    else: st.warning("Isi tindakan perbaikan terlebih dahulu.")
+                if g.get('foto_kerusakan_url'): st.image(g['foto_kerusakan_url'], width=250)
+                if st.button(f"Selesaikan Perbaikan", key=g['id']):
+                    supabase.table("gangguan_logs").update({"status": "Closed"}).eq("id", g['id']).execute()
+                    st.success("Selesai!"); st.rerun()
     else: st.info("Tidak ada gangguan aktif.")
 
 elif st.session_state.hal in ['Harian', 'Mingguan', 'Bulanan']:
     if st.button("⬅️ KEMBALI"): pindah('Menu'); st.rerun()
     st.subheader(f"Form {st.session_state.hal}")
-    with st.form("f_maintenance", clear_on_submit=True):
+    with st.form("f_m"):
         sel_a = st.selectbox("Pilih Aset", list(opt_asset.keys()))
         t = st.selectbox("Teknisi", list_tek)
         kon = st.radio("Kondisi", ["Sangat Baik", "Baik", "Perlu Perbaikan", "Rusak"], index=1)
@@ -185,7 +180,7 @@ elif st.session_state.hal in ['Harian', 'Mingguan', 'Bulanan']:
                 "asset_id": opt_asset[sel_a]['id'], "teknisi": t, 
                 "periode": st.session_state.hal, "kondisi": kon, "keterangan": ket
             }).execute()
-            st.success("Data Tersimpan!"); st.balloons()
+            st.success("Data Tersimpan!"); st.rerun()
 
 elif st.session_state.hal == 'Export':
     if st.button("⬅️ KEMBALI"): pindah('Menu'); st.rerun()
@@ -194,13 +189,13 @@ elif st.session_state.hal == 'Export':
     if logs:
         df = pd.DataFrame(logs)
         df['Nama Aset'] = df['assets'].apply(lambda x: x['nama_aset'] if x else "N/A")
-        df['Tanggal'] = pd.to_datetime(df['created_at']).dt.date
         tgl_r = st.date_input("Rentang Tanggal", [datetime.date.today(), datetime.date.today()])
         if len(tgl_r) == 2:
-            df_f = df[(df['Tanggal'] >= tgl_r[0]) & (df['Tanggal'] <= tgl_r[1])]
-            st.dataframe(df_f[['Nama Aset', 'periode', 'teknisi', 'kondisi', 'Tanggal']], use_container_width=True)
+            mask = (pd.to_datetime(df['created_at']).dt.date >= tgl_r[0]) & (pd.to_datetime(df['created_at']).dt.date <= tgl_r[1])
+            df_f = df.loc[mask]
+            st.dataframe(df_f[['Nama Aset', 'periode', 'teknisi', 'kondisi', 'created_at']], use_container_width=True)
             p_sel = st.selectbox("Diketahui (BI)", list_peg)
             t_sel = st.selectbox("Dibuat (Teknisi)", list_tek)
             if not df_f.empty:
-                pdf_output = generate_pdf(df_f, f"{tgl_r[0]} s/d {tgl_r[1]}", staff_map[p_sel], staff_map[t_sel])
-                st.download_button(label="📥 DOWNLOAD PDF", data=pdf_output, file_name=f"Laporan_ME.pdf", mime="application/pdf")
+                pdf_out = generate_pdf(df_f, f"{tgl_r[0]} s/d {tgl_r[1]}", staff_map[p_sel], staff_map[t_sel])
+                st.download_button("📥 DOWNLOAD PDF", data=pdf_out, file_name="Laporan_Monitoring.pdf", mime="application/pdf")
