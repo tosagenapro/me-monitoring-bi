@@ -8,7 +8,7 @@ import plotly.express as px
 import time
 
 # --- 1. CONFIG & KONEKSI ---
-st.set_page_config(page_title="SIMANTAP BI BPP", layout="wide", initial_sidebar_state="collapsed")
+st.set_page_config(page_title="SIMANTAP ME BI BPP", layout="wide", initial_sidebar_state="collapsed")
 URL = st.secrets["SUPABASE_URL"]
 KEY = st.secrets["SUPABASE_KEY"]
 supabase: Client = create_client(URL, KEY)
@@ -42,29 +42,32 @@ SOW_MASTER = {
     }
 }
 
-# --- 3. CSS CUSTOM (TERMASUK STYLE HEADER BARU) ---
+# --- 3. CSS CUSTOM (UI/UX MODERN) ---
 st.markdown("""
     <style>
     header {visibility: hidden;}
     .stApp { background: #0f172a; }
     .main-header { 
-        text-align: center; padding: 20px; background: #1e293b; 
-        border: 1px solid #334155; border-radius: 12px; margin-bottom: 25px; 
+        text-align: center; padding: 25px; background: #1e293b; 
+        border: 2px solid #334155; border-radius: 15px; margin-bottom: 30px; 
     }
-    .main-header h1 { color: #38bdf8; margin: 0; font-size: 1.8rem; letter-spacing: 3px; font-weight: 800; }
-    .main-header p { color: #94a3b8; margin: 5px 0 0 0; font-size: 0.9rem; font-style: italic; letter-spacing: 1px; }
+    .main-header h1 { color: #38bdf8; margin: 0; font-size: 2rem; letter-spacing: 3px; font-weight: 800; }
+    .main-header p { color: #94a3b8; margin: 8px 0 0 0; font-size: 0.95rem; font-style: italic; letter-spacing: 1px; }
     
     div.stButton > button { 
-        width: 100%; height: 70px !important; background: #1e293b !important; 
-        border: 1px solid #334155 !important; border-radius: 8px !important; 
-        color: #38bdf8 !important; font-weight: bold !important; font-size: 0.9rem !important;
+        width: 100%; height: 75px !important; background: #1e293b !important; 
+        border: 1px solid #334155 !important; border-radius: 12px !important; 
+        color: #38bdf8 !important; font-weight: bold !important; font-size: 0.95rem !important;
+        margin-bottom: 10px;
     }
-    div.stButton > button:hover { border-color: #38bdf8 !important; background: #0f172a !important; }
+    div.stButton > button:hover { border-color: #38bdf8 !important; background: #0f172a !important; box-shadow: 0 4px 15px rgba(56, 189, 248, 0.2); }
     label { color: #38bdf8 !important; font-weight: bold !important; }
+    .stTabs [data-baseweb="tab-list"] { gap: 20px; }
+    .stTabs [data-baseweb="tab"] { background-color: #1e293b; border-radius: 5px; color: white; padding: 10px 20px; }
     </style>
     """, unsafe_allow_html=True)
 
-# --- 4. HEADER UTAMA (DENGAN IDENTITAS ME) ---
+# --- 4. HEADER UTAMA ---
 st.markdown("""
     <div class="main-header">
         <h1>⚡ SIMANTAP ME | KPwBI BALIKPAPAN</h1>
@@ -72,7 +75,7 @@ st.markdown("""
     </div>
     """, unsafe_allow_html=True)
 
-# --- 5. FUNGSI FOTO & PDF ---
+# --- 5. FUNGSI PENDUKUNG (FOTO & PDF) ---
 def upload_foto(file):
     if file is not None:
         filename = f"{uuid.uuid4()}.jpg"
@@ -145,16 +148,21 @@ list_peg = [s['nama'] for s in staff_list if s['kategori'] == 'PEGAWAI']
 
 # --- 7. ROUTING HALAMAN ---
 if st.session_state.hal == 'Menu':
-    c1, mid, c2 = st.columns([1, 0.2, 1])
-    with c1:
-        if st.button("☀️ CHECKLIST HARIAN"): pindah('Harian'); st.rerun()
-        if st.button("📅 CHECKLIST MINGGUAN"): pindah('Mingguan'); st.rerun()
-        if st.button("🏆 CHECKLIST BULANAN"): pindah('Bulanan'); st.rerun()
-        if st.button("📑 EXPORT PDF"): pindah('Export'); st.rerun()
-    with c2:
-        if st.button("⚠️ LAPOR GANGGUAN"): pindah('Gangguan'); st.rerun()
-        if st.button("🔄 UPDATE PERBAIKAN"): pindah('Update'); st.rerun()
-        if st.button("📊 STATISTIK"): pindah('Statistik'); st.rerun()
+    left, center, right = st.columns([0.4, 2, 0.4])
+    with center:
+        col1, col2 = st.columns(2)
+        with col1:
+            if st.button("☀️ CHECKLIST HARIAN"): pindah('Harian'); st.rerun()
+            if st.button("📅 CHECKLIST MINGGUAN"): pindah('Mingguan'); st.rerun()
+            if st.button("🏆 CHECKLIST BULANAN"): pindah('Bulanan'); st.rerun()
+            if st.button("📑 EXPORT PDF"): pindah('Export'); st.rerun()
+        with col2:
+            if st.button("⚠️ LAPOR GANGGUAN"): pindah('Gangguan'); st.rerun()
+            if st.button("🔄 UPDATE PERBAIKAN"): pindah('Update'); st.rerun()
+            if st.button("📊 STATISTIK"): pindah('Statistik'); st.rerun()
+            if st.button("ℹ️ INFO SISTEM"): st.toast("SIMANTAP ME v2.1 Platinum", icon="⚡")
+    st.markdown("---")
+    st.caption("<center>© 2026 ME Balikpapan - CV. Indo Mega Jaya</center>", unsafe_allow_html=True)
 
 elif st.session_state.hal == 'Statistik':
     if st.button("⬅️ KEMBALI"): pindah('Menu'); st.rerun()
@@ -164,20 +172,19 @@ elif st.session_state.hal == 'Statistik':
         c1.metric("Total Gangguan", len(df_g))
         c2.metric("Pending", len(df_g[df_g['status'] == 'Open']), delta_color="inverse")
         c3.metric("Clear", len(df_g[df_g['status'] == 'Closed']))
-        st.plotly_chart(px.pie(df_g, names='status', title="Status Kondisi Fasilitas", hole=0.4, color_discrete_sequence=['#ef4444', '#22c55e']))
+        st.plotly_chart(px.pie(df_g, names='status', title="Kondisi Fasilitas ME", hole=0.4, color_discrete_sequence=['#ef4444', '#22c55e']))
     else: st.info("Belum ada data.")
 
 elif st.session_state.hal == 'Gangguan':
     if st.button("⬅️ KEMBALI"): pindah('Menu'); st.rerun()
-    st.subheader("⚠️ Lapor Gangguan Baru")
     with st.form("f_g"):
         sel_a = st.selectbox("Pilih Aset", list(opt_asset.keys()))
         t = st.selectbox("Pelapor", list_tek); urg = st.selectbox("Urgensi", ["Sedang", "Mendesak", "Darurat"])
-        mas = st.text_area("Deskripsi"); foto = st.camera_input("Ambil Foto")
+        mas = st.text_area("Deskripsi Kerusakan"); foto = st.camera_input("Ambil Foto")
         if st.form_submit_button("KIRIM LAPORAN"):
             u = upload_foto(foto)
             supabase.table("gangguan_logs").insert({"asset_id": opt_asset[sel_a]['id'], "teknisi": t, "masalah": mas, "urgensi": urg, "status": "Open", "foto_kerusakan_url": u}).execute()
-            st.success("✅ Laporan Berhasil Dikirim!"); st.toast("Laporan masuk sistem!", icon="⚠️")
+            st.success("✅ Laporan Berhasil Dikirim!"); st.toast("Masuk database!", icon="⚠️")
             time.sleep(1.5); st.rerun()
 
 elif st.session_state.hal == 'Update':
@@ -192,9 +199,8 @@ elif st.session_state.hal == 'Update':
                 if st.button("Update Selesai", key=f"btn_{g['id']}"):
                     u_a = upload_foto(foto_a)
                     supabase.table("gangguan_logs").update({"status": "Closed", "tindakan_perbaikan": tindakan, "teknisi_perbaikan": t_p, "tgl_perbaikan": datetime.datetime.now().isoformat(), "foto_setelah_perbaikan_url": u_a}).eq("id", g['id']).execute()
-                    st.success("✅ Status Perbaikan Berhasil Diperbarui!"); st.balloons()
-                    time.sleep(2); st.rerun()
-    else: st.info("Tidak ada laporan aktif.")
+                    st.success("✅ Selesai!"); st.balloons(); time.sleep(2); st.rerun()
+    else: st.info("Semua perangkat aman (No Pending Task).")
 
 elif st.session_state.hal in ['Harian', 'Mingguan', 'Bulanan']:
     if st.button("⬅️ KEMBALI"): pindah('Menu'); st.rerun()
@@ -208,7 +214,7 @@ elif st.session_state.hal in ['Harian', 'Mingguan', 'Bulanan']:
     elif "PANEL" in nama_a: k_key = "PANEL"
     
     with st.form("f_chk"):
-        t = st.selectbox("Teknisi", list_tek); st.write(f"--- Poin Pemeriksaan {k_key} ---")
+        t = st.selectbox("Teknisi", list_tek); st.write(f"--- Parameter {k_key} ---")
         resp = []
         for i, task in enumerate(SOW_MASTER[k_key][st.session_state.hal]):
             check_k = ["%", "VOLT", "AMPERE", "PSI", "°C", "HZ", "MENIT", "PERSENTASE", "SUHU"]
@@ -217,17 +223,16 @@ elif st.session_state.hal in ['Harian', 'Mingguan', 'Bulanan']:
             else:
                 r = st.radio(f"{task}", ["Normal", "Tidak Normal", "N/A"], horizontal=True, key=f"r_{i}"); resp.append(f"{task}: {r}")
         kon = st.radio("Kondisi Keseluruhan", ["Sangat Baik", "Baik", "Perlu Perbaikan", "Rusak"], index=1); cat = st.text_area("Catatan")
-        if st.form_submit_button("💾 SIMPAN DATA"):
+        if st.form_submit_button("💾 SIMPAN"):
             k_f = " | ".join(resp) + (f" | Catatan: {cat}" if cat else "")
             supabase.table("maintenance_logs").insert({"asset_id": opt_asset[sel_a_l]['id'], "teknisi": t, "periode": st.session_state.hal, "kondisi": kon, "keterangan": k_f}).execute()
-            st.success(f"✅ Berhasil! Data {st.session_state.hal} disimpan."); st.toast("Checklist Tersimpan!", icon="💾")
+            st.success(f"✅ Data {nama_a} Berhasil Disimpan!"); st.toast("Checklist Terkirim!", icon="💾")
             if st.session_state.hal == 'Bulanan': st.balloons()
             time.sleep(1.5); st.rerun()
 
 elif st.session_state.hal == 'Export':
     if st.button("⬅️ KEMBALI"): pindah('Menu'); st.rerun()
-    st.subheader("📊 Export Laporan PDF")
-    t1, t2 = st.tabs(["📑 Log Checklist", "⚠️ Log Gangguan"])
+    t1, t2 = st.tabs(["📑 Log Checklist ME", "⚠️ Log Gangguan ME"])
     with t1:
         res = supabase.table("maintenance_logs").select("*, assets(nama_aset)").order("created_at", desc=True).execute().data
         if res:
@@ -235,26 +240,24 @@ elif st.session_state.hal == 'Export':
             c1, c2 = st.columns(2)
             with c1: dr = st.date_input("Rentang Tanggal", [datetime.date.today(), datetime.date.today()], key="d1")
             with c2: filter_p = st.selectbox("Filter Periode", ["Semua", "Harian", "Mingguan", "Bulanan"], key="f_p")
-            
             if len(dr) == 2:
                 dff = df[(pd.to_datetime(df['created_at']).dt.date >= dr[0]) & (pd.to_datetime(df['created_at']).dt.date <= dr[1])]
                 if filter_p != "Semua": dff = dff[dff['periode'] == filter_p]
-                
                 st.dataframe(dff[['Nama Aset', 'periode', 'teknisi', 'kondisi', 'created_at']], use_container_width=True)
                 if not dff.empty:
                     p, t = st.selectbox("Diketahui (BI)", list_peg, key="p1"), st.selectbox("Dibuat (IMJ)", list_tek, key="t1")
                     if st.button("CETAK PDF CHECKLIST"):
                         pb = generate_pdf(dff, f"{dr[0]} sd {dr[1]} ({filter_p})", staff_map[p], staff_map[t], f"LAPORAN CHECKLIST {filter_p.upper()}")
-                        if pb: st.download_button(f"Download PDF {filter_p}", pb, f"Checklist_{filter_p}_{dr[0]}.pdf")
+                        if pb: st.download_button(f"Download PDF {filter_p}", pb, f"Checklist_ME_{filter_p}_{dr[0]}.pdf")
     with t2:
         res2 = supabase.table("gangguan_logs").select("*, assets(nama_aset)").order("created_at", desc=True).execute().data
         if res2:
             df2 = pd.DataFrame(res2); df2['Nama Aset'] = df2['assets'].apply(lambda x: x['nama_aset'] if x else "N/A")
-            dr2 = st.date_input("Rentang Tanggal", [datetime.date.today(), datetime.date.today()], key="d2")
+            dr2 = st.date_input("Filter Tanggal", [datetime.date.today(), datetime.date.today()], key="d2")
             if len(dr2) == 2:
                 df2f = df2[(pd.to_datetime(df2['created_at']).dt.date >= dr2[0]) & (pd.to_datetime(df2['created_at']).dt.date <= dr2[1])]
                 st.dataframe(df2f[['Nama Aset', 'urgensi', 'teknisi', 'status', 'masalah']], use_container_width=True)
                 p2, t2 = st.selectbox("Diketahui (BI)", list_peg, key="p2"), st.selectbox("Dibuat (IMJ)", list_tek, key="t2")
                 if st.button("CETAK PDF KERUSAKAN"):
-                    pb2 = generate_pdf(df2f, f"{dr2[0]} sd {dr2[1]}", staff_map[p2], staff_map[t2], "LAPORAN KERUSAKAN")
-                    if pb2: st.download_button("Download Laporan Gangguan", pb2, f"Gangguan_{dr2[0]}.pdf")
+                    pb2 = generate_pdf(df2f, f"{dr2[0]} sd {dr2[1]}", staff_map[p2], staff_map[t2], "LAPORAN KERUSAKAN FASILITAS")
+                    if pb2: st.download_button("Download PDF Gangguan", pb2, f"Laporan_Kerusakan_ME_{dr2[0]}.pdf")
