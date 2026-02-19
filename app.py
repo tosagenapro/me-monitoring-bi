@@ -11,16 +11,16 @@ URL = st.secrets["SUPABASE_URL"]
 KEY = st.secrets["SUPABASE_KEY"]
 supabase: Client = create_client(URL, KEY)
 
-# --- 2. CSS STABIL (Tampilan Mobile Friendly) ---
+# --- 2. CSS STABIL ---
 st.markdown("""
     <style>
     header {visibility: hidden;}
     .stApp { background: #0f172a; }
-    .main-header { text-align: center; padding: 20px; background: #1e293b; border-bottom: 3px solid #38bdf8; margin-bottom: 20px; border-radius: 0 0 15px 15px; }
-    .main-header h1 { color: white; margin: 0; font-size: 1.5rem; text-shadow: 0 0 10px #38bdf8; }
-    div.stButton > button { width: 100%; height: 90px !important; background: #1e293b !important; border: 2px solid #334155 !important; border-radius: 12px !important; color: #38bdf8 !important; font-weight: bold !important; margin-bottom: 10px; }
-    div.stButton > button:hover { border-color: #38bdf8 !important; box-shadow: 0 0 15px rgba(56, 189, 248, 0.3); }
-    label { color: #38bdf8 !important; font-weight: bold !important; }
+    .main-header { text-align: center; padding: 20px; background: #1e293b; border-bottom: 3px solid #00adef; margin-bottom: 20px; border-radius: 0 0 15px 15px; }
+    .main-header h1 { color: white; margin: 0; font-size: 1.5rem; text-shadow: 0 0 10px #00adef; }
+    div.stButton > button { width: 100%; height: 80px !important; background: #1e293b !important; border: 2px solid #334155 !important; border-radius: 12px !important; color: #00adef !important; font-weight: bold !important; margin-bottom: 10px; }
+    div.stButton > button:hover { border-color: #00adef !important; box-shadow: 0 0 15px rgba(0, 173, 239, 0.3); }
+    label { color: #00adef !important; font-weight: bold !important; }
     .stSelectbox, .stTextInput, .stTextArea { background-color: #1e293b !important; color: white !important; }
     </style>
     """, unsafe_allow_html=True)
@@ -54,7 +54,7 @@ def get_sow_fields(nama_aset, jenis):
         fields['cek_fisik'] = st.radio("Kondisi Fisik Umum", ["Normal", "Bermasalah"])
     return fields
 
-# --- 4. FUNGSI GENERATE PDF (FIX TOTAL - TIDAK AMBURADUL) ---
+# --- 4. FUNGSI GENERATE PDF (PERBAIKAN TANDA TANGAN RATA TENGAH) ---
 def generate_pdf(df, rentang_tgl, p_sel, t_sel):
     pdf = FPDF(orientation='L', unit='mm', format='A4')
     pdf.add_page()
@@ -68,12 +68,13 @@ def generate_pdf(df, rentang_tgl, p_sel, t_sel):
     
     # Header Tabel
     pdf.set_font("Helvetica", "B", 9)
-    pdf.set_fill_color(56, 189, 248) # Biru Terang
+    pdf.set_fill_color(0, 173, 239) # Biru Khas
     pdf.set_text_color(255, 255, 255)
     
-    cols = {"Aset": 55, "Periode": 25, "Teknisi": 35, "Kondisi": 35, "Detail SOW & Keterangan": 127}
-    for txt, w in cols.items():
-        pdf.cell(w, 10, txt, 1, 0, "C", True)
+    w = [55, 25, 35, 35, 127] # Lebar Kolom
+    cols = ["Aset", "Periode", "Teknisi", "Kondisi", "Detail SOW & Keterangan"]
+    for i in range(len(cols)):
+        pdf.cell(w[i], 10, cols[i], 1, 0, "C", True)
     pdf.ln()
 
     # Isi Tabel
@@ -81,7 +82,6 @@ def generate_pdf(df, rentang_tgl, p_sel, t_sel):
     pdf.set_text_color(0, 0, 0)
     
     for _, row in df.iterrows():
-        # Gabungkan data SOW JSON ke Teks
         sow_data = row.get('checklist_data', {})
         if isinstance(sow_data, str):
             try: sow_data = json.loads(sow_data)
@@ -90,51 +90,71 @@ def generate_pdf(df, rentang_tgl, p_sel, t_sel):
         sow_txt = " | ".join([f"{k.replace('_',' ').capitalize()}: {v}" for k, v in sow_data.items()])
         full_ket = f"{sow_txt}\nCatatan: {row['keterangan']}"
         
-        # Hitung baris agar kotak tidak pecah (MultiCell logic)
-        start_x = pdf.get_x()
+        # Hitung Row Height Dinamis
         start_y = pdf.get_y()
+        pdf.multi_cell(w[0], 10, str(row['Nama Aset']), 1, 'L')
+        y_aset = pdf.get_y()
         
-        # Kolom Nama Aset (Bisa wrap)
-        pdf.multi_cell(55, 10, str(row['Nama Aset']), 1, 'L')
-        end_y = pdf.get_y()
-        row_height = end_y - start_y
+        pdf.set_xy(pdf.get_x() + w[0] + 10, start_y) # Reset ke kolom detail
+        pdf.set_xy(10 + w[0] + w[1] + w[2] + w[3], start_y)
+        pdf.multi_cell(w[4], 5, full_ket, 1, 'L')
+        y_detail = pdf.get_y()
         
-        # Pindah ke samping untuk kolom lainnya dengan tinggi yang sama
-        pdf.set_xy(start_x + 55, start_y)
-        pdf.cell(25, row_height, str(row.get('periode', '-')), 1, 0, "C")
-        pdf.cell(35, row_height, str(row['teknisi']), 1, 0, "C")
-        pdf.cell(35, row_height, str(row['kondisi']), 1, 0, "C")
+        max_y = max(y_aset, y_detail)
+        h = max_y - start_y
         
-        # Kolom Detail (Wrap text)
-        pdf.multi_cell(127, 5, full_ket, 1, 'L')
+        # Gambar ulang kotak border agar rapi
+        pdf.rect(10, start_y, w[0], h)
+        pdf.rect(10 + w[0], start_y, w[1], h)
+        pdf.rect(10 + w[0] + w[1], start_y, w[2], h)
+        pdf.rect(10 + w[0] + w[1] + w[2], start_y, w[3], h)
         
-        # Reset posisi untuk baris baru agar tidak menumpuk
-        if pdf.get_y() < end_y:
-            pdf.set_y(end_y)
-        pdf.ln(0)
+        # Isi data tengah
+        pdf.set_xy(10 + w[0], start_y)
+        pdf.cell(w[1], h, str(row.get('periode', '-')), 0, 0, "C")
+        pdf.cell(w[2], h, str(row['teknisi']), 0, 0, "C")
+        pdf.cell(w[3], h, str(row['kondisi']), 0, 0, "C")
+        
+        pdf.set_y(max_y)
+        if pdf.get_y() > 170: pdf.add_page()
 
-    # Footer Tanda Tangan
+    # --- BAGIAN TANDA TANGAN (RATA TENGAH PRESISI) ---
     pdf.ln(15)
-    y_sign = pdf.get_y()
+    current_y = pdf.get_y()
     pdf.set_font("Helvetica", "B", 10)
-    pdf.set_xy(40, y_sign); pdf.cell(0, 5, "Mengetahui,")
-    pdf.set_xy(210, y_sign); pdf.cell(0, 5, "Dibuat Oleh,")
+    
+    # Mengetahui (Kiri)
+    pdf.set_xy(10, current_y)
+    pdf.cell(138, 5, "Mengetahui,", 0, 0, "C")
+    
+    # Dibuat Oleh (Kanan)
+    pdf.set_xy(148, current_y)
+    pdf.cell(138, 5, "Dibuat Oleh,", 0, 1, "C")
     
     pdf.ln(20)
-    pdf.set_font("Helvetica", "BU", 10)
-    pdf.set_xy(40, pdf.get_y()); pdf.cell(0, 5, f"( {p_sel} )")
-    pdf.set_xy(210, pdf.get_y()); pdf.cell(0, 5, f"( {t_sel} )")
+    sign_y = pdf.get_y()
     
-    pdf.ln(5)
+    # Nama (Mengetahui)
+    pdf.set_xy(10, sign_y)
+    pdf.cell(138, 5, f"( {p_sel} )", 0, 0, "C")
+    
+    # Nama (Dibuat)
+    pdf.set_xy(148, sign_y)
+    pdf.cell(138, 5, f"( {t_sel} )", 0, 1, "C")
+    
     pdf.set_font("Helvetica", "", 9)
-    pdf.set_xy(40, pdf.get_y()); pdf.cell(0, 5, "Staf BI Balikpapan")
-    pdf.set_xy(210, pdf.get_y()); pdf.cell(0, 5, "Teknisi ME")
+    # Jabatan
+    pdf.set_xy(10, pdf.get_y())
+    pdf.cell(138, 5, "Staf BI Balikpapan", 0, 0, "C")
+    pdf.set_xy(148, pdf.get_y() - 5)
+    pdf.set_xy(148, pdf.get_y())
+    pdf.cell(138, 5, "Teknisi ME", 0, 1, "C")
 
     return bytes(pdf.output())
 
-# --- 5. LOGIKA DATA & NAVIGASI ---
+# --- 5. LOGIKA NAVIGASI ---
 if 'hal' not in st.session_state: st.session_state.hal = 'Menu'
-def pindah(nama): st.session_state.hal = nama
+def pindah(n): st.session_state.hal = n
 
 @st.cache_data(ttl=30)
 def load_data():
@@ -147,7 +167,6 @@ opt_asset = {f"{a['kode_qr']} - {a['nama_aset']}": a for a in assets_list}
 list_tek = [s['nama'] for s in staff_list if s['kategori'] == 'TEKNISI']
 list_peg = [s['nama'] for s in staff_list if s['kategori'] == 'PEGAWAI']
 
-# --- 6. TAMPILAN ---
 st.markdown('<div class="main-header"><h1>⚡ SIMANTAP BI BALIKPAPAN</h1></div>', unsafe_allow_html=True)
 
 if st.session_state.hal == 'Menu':
@@ -169,25 +188,18 @@ elif st.session_state.hal in ['Harian', 'Mingguan', 'Bulanan']:
     with st.form("f_run", clear_on_submit=True):
         t = st.selectbox("Teknisi", list_tek)
         res_sow = get_sow_fields(opt_asset[sel_a]['nama_aset'], curr)
-        kon = st.radio("Kondisi", ["Sangat Baik", "Baik", "Perlu Perbaikan", "Rusak"], index=1)
-        ket = st.text_area("Keterangan")
-        cam = st.checkbox("📸 Kamera")
-        foto = st.camera_input("Foto") if cam else None
-        if st.form_submit_button("SIMPAN"):
-            url = None
-            if foto:
-                fn = f"{curr}_{datetime.datetime.now().strftime('%m%d_%H%M%S')}.jpg"
-                supabase.storage.from_("FOTO_MAINTENANCE").upload(fn, foto.getvalue())
-                url = supabase.storage.from_("FOTO_MAINTENANCE").get_public_url(fn)
+        kon = st.radio("Kondisi Akhir", ["Sangat Baik", "Baik", "Perlu Perbaikan", "Rusak"], index=1)
+        ket = st.text_area("Keterangan Tambahan")
+        if st.form_submit_button("SIMPAN DATA"):
             supabase.table("maintenance_logs").insert({
                 "asset_id": opt_asset[sel_a]['id'], "teknisi": t, "periode": curr,
-                "checklist_data": res_sow, "kondisi": kon, "keterangan": ket, "foto_url": url
+                "checklist_data": res_sow, "kondisi": kon, "keterangan": ket
             }).execute()
-            st.success("Berhasil!"); st.balloons()
+            st.success(f"Laporan {curr} Berhasil!"); st.balloons()
 
 elif st.session_state.hal == 'Export':
     if st.button("⬅️ KEMBALI"): pindah('Menu'); st.rerun()
-    st.subheader("📊 Export Laporan PDF")
+    st.subheader("📊 Monitoring & Export PDF")
     all_logs = supabase.table("maintenance_logs").select("*, assets(nama_aset)").order("created_at", desc=True).execute().data
     if all_logs:
         df = pd.DataFrame(all_logs)
@@ -206,8 +218,8 @@ elif st.session_state.hal == 'Export':
             p_ttd = st.selectbox("Mengetahui (Staf BI)", list_peg)
             t_ttd = st.selectbox("Dibuat (Teknisi)", list_tek)
             
-            if st.download_button("📥 DOWNLOAD PDF", generate_pdf(df_f, f"{tgls[0]} s/d {tgls[1]}", p_ttd, t_ttd), "Laporan_ME.pdf"):
-                st.success("Selesai!")
+            if st.download_button("📥 DOWNLOAD PDF", generate_pdf(df_f, f"{tgls[0]} s/d {tgls[1]}", p_ttd, t_ttd), f"Lap_ME_{tgls[0]}.pdf"):
+                st.success("Download Berhasil")
 
 elif st.session_state.hal == 'Gangguan':
     if st.button("⬅️ KEMBALI"): pindah('Menu'); st.rerun()
@@ -222,4 +234,4 @@ elif st.session_state.hal == 'Gangguan':
 elif st.session_state.hal == 'Update':
     if st.button("⬅️ KEMBALI"): pindah('Menu'); st.rerun()
     st.subheader("🔄 Update Status")
-    st.info("Fitur ini menarik data dari Gangguan_Logs yang masih Open.")
+    st.info("Pilih laporan gangguan untuk diupdate statusnya.")
