@@ -11,7 +11,7 @@ URL = st.secrets["SUPABASE_URL"]
 KEY = st.secrets["SUPABASE_KEY"]
 supabase: Client = create_client(URL, KEY)
 
-# --- 2. CSS STABIL (Tampilan Menu Tetap Solid) ---
+# --- 2. CSS STABIL (Tampilan Mobile Friendly) ---
 st.markdown("""
     <style>
     header {visibility: hidden;}
@@ -21,10 +21,11 @@ st.markdown("""
     div.stButton > button { width: 100%; height: 90px !important; background: #1e293b !important; border: 2px solid #334155 !important; border-radius: 12px !important; color: #38bdf8 !important; font-weight: bold !important; margin-bottom: 10px; }
     div.stButton > button:hover { border-color: #38bdf8 !important; box-shadow: 0 0 15px rgba(56, 189, 248, 0.3); }
     label { color: #38bdf8 !important; font-weight: bold !important; }
+    .stSelectbox, .stTextInput, .stTextArea { background-color: #1e293b !important; color: white !important; }
     </style>
     """, unsafe_allow_html=True)
 
-# --- 3. LOGIKA SOW DINAMIS ---
+# --- 3. FUNGSI LOGIKA SOW ---
 def get_sow_fields(nama_aset, jenis):
     fields = {}
     st.write(f"### 📋 Parameter {jenis}")
@@ -53,99 +54,102 @@ def get_sow_fields(nama_aset, jenis):
         fields['cek_fisik'] = st.radio("Kondisi Fisik Umum", ["Normal", "Bermasalah"])
     return fields
 
-# --- 4. FUNGSI GENERATE PDF (PERBAIKAN TOTAL) ---
+# --- 4. FUNGSI GENERATE PDF (FIX TOTAL - TIDAK AMBURADUL) ---
 def generate_pdf(df, rentang_tgl, p_sel, t_sel):
     pdf = FPDF(orientation='L', unit='mm', format='A4')
     pdf.add_page()
     
-    # Header Laporan
-    pdf.set_font("Helvetica", "B", 14)
+    # Header
+    pdf.set_font("Helvetica", "B", 16)
     pdf.cell(0, 10, "LAPORAN PEMELIHARAAN ME - BI BALIKPAPAN", ln=True, align="C")
     pdf.set_font("Helvetica", "I", 10)
-    pdf.cell(0, 7, f"Periode Laporan: {rentang_tgl}", ln=True, align="C")
+    pdf.cell(0, 7, f"Periode: {rentang_tgl}", ln=True, align="C")
     pdf.ln(10)
     
-    # Tabel Header
+    # Header Tabel
     pdf.set_font("Helvetica", "B", 9)
-    pdf.set_fill_color(56, 189, 248) # Warna Biru Muda BI
+    pdf.set_fill_color(56, 189, 248) # Biru Terang
     pdf.set_text_color(255, 255, 255)
     
-    # Lebar Kolom
-    w_nama = 50
-    w_per = 25
-    w_tek = 30
-    w_kon = 30
-    w_sow = 142
+    cols = {"Aset": 55, "Periode": 25, "Teknisi": 35, "Kondisi": 35, "Detail SOW & Keterangan": 127}
+    for txt, w in cols.items():
+        pdf.cell(w, 10, txt, 1, 0, "C", True)
+    pdf.ln()
 
-    pdf.cell(w_nama, 10, "Nama Aset", 1, 0, "C", True)
-    pdf.cell(w_per, 10, "Periode", 1, 0, "C", True)
-    pdf.cell(w_tek, 10, "Teknisi", 1, 0, "C", True)
-    pdf.cell(w_kon, 10, "Kondisi", 1, 0, "C", True)
-    pdf.cell(w_sow, 10, "Detail Pengecekan SOW & Keterangan", 1, 1, "C", True)
-    
     # Isi Tabel
     pdf.set_font("Helvetica", "", 8)
     pdf.set_text_color(0, 0, 0)
     
     for _, row in df.iterrows():
-        # Parsing SOW JSON
-        sow = row.get('checklist_data', {})
-        sow_txt = " | ".join([f"{k.replace('_',' ').title()}: {v}" for k, v in sow.items()]) if isinstance(sow, dict) else ""
-        full_txt = f"{sow_txt}\nCatatan: {row['keterangan']}"
+        # Gabungkan data SOW JSON ke Teks
+        sow_data = row.get('checklist_data', {})
+        if isinstance(sow_data, str):
+            try: sow_data = json.loads(sow_data)
+            except: sow_data = {}
         
-        # Hitung tinggi baris otomatis berdasarkan teks terpanjang
-        current_y = pdf.get_y()
-        if current_y > 170: # Auto Page Break jika hampir habis
-            pdf.add_page()
-            current_y = pdf.get_y()
+        sow_txt = " | ".join([f"{k.replace('_',' ').capitalize()}: {v}" for k, v in sow_data.items()])
+        full_ket = f"{sow_txt}\nCatatan: {row['keterangan']}"
+        
+        # Hitung baris agar kotak tidak pecah (MultiCell logic)
+        start_x = pdf.get_x()
+        start_y = pdf.get_y()
+        
+        # Kolom Nama Aset (Bisa wrap)
+        pdf.multi_cell(55, 10, str(row['Nama Aset']), 1, 'L')
+        end_y = pdf.get_y()
+        row_height = end_y - start_y
+        
+        # Pindah ke samping untuk kolom lainnya dengan tinggi yang sama
+        pdf.set_xy(start_x + 55, start_y)
+        pdf.cell(25, row_height, str(row.get('periode', '-')), 1, 0, "C")
+        pdf.cell(35, row_height, str(row['teknisi']), 1, 0, "C")
+        pdf.cell(35, row_height, str(row['kondisi']), 1, 0, "C")
+        
+        # Kolom Detail (Wrap text)
+        pdf.multi_cell(127, 5, full_ket, 1, 'L')
+        
+        # Reset posisi untuk baris baru agar tidak menumpuk
+        if pdf.get_y() < end_y:
+            pdf.set_y(end_y)
+        pdf.ln(0)
 
-        # Render kolom statis
-        pdf.multi_cell(w_nama, 8, str(row['Nama Aset']), 1, "L")
-        h = pdf.get_y() - current_y
-        
-        pdf.set_xy(w_nama + 10, current_y)
-        pdf.cell(w_per, h, str(row.get('periode', '-')), 1, 0, "C")
-        pdf.cell(w_tek, h, str(row['teknisi']), 1, 0, "C")
-        pdf.cell(w_kon, h, str(row['kondisi']), 1, 0, "C")
-        
-        # Render Detail SOW dengan MultiCell (Bungkus Teks)
-        pdf.multi_cell(w_sow, 8, full_txt, 1, "L")
-        
+    # Footer Tanda Tangan
     pdf.ln(15)
-    
-    # Tanda Tangan
+    y_sign = pdf.get_y()
     pdf.set_font("Helvetica", "B", 10)
-    pdf.cell(140, 5, "Mengetahui,", 0, 0, "C")
-    pdf.cell(140, 5, "Dibuat Oleh,", 0, 1, "C")
-    pdf.ln(15)
-    pdf.cell(140, 5, f"( {p_sel} )", 0, 0, "C")
-    pdf.cell(140, 5, f"( {t_sel} )", 0, 1, "C")
-    pdf.set_font("Helvetica", "", 9)
-    pdf.cell(140, 5, "Staf BI Balikpapan", 0, 0, "C")
-    pdf.cell(140, 5, "Teknisi ME", 0, 1, "C")
+    pdf.set_xy(40, y_sign); pdf.cell(0, 5, "Mengetahui,")
+    pdf.set_xy(210, y_sign); pdf.cell(0, 5, "Dibuat Oleh,")
     
+    pdf.ln(20)
+    pdf.set_font("Helvetica", "BU", 10)
+    pdf.set_xy(40, pdf.get_y()); pdf.cell(0, 5, f"( {p_sel} )")
+    pdf.set_xy(210, pdf.get_y()); pdf.cell(0, 5, f"( {t_sel} )")
+    
+    pdf.ln(5)
+    pdf.set_font("Helvetica", "", 9)
+    pdf.set_xy(40, pdf.get_y()); pdf.cell(0, 5, "Staf BI Balikpapan")
+    pdf.set_xy(210, pdf.get_y()); pdf.cell(0, 5, "Teknisi ME")
+
     return bytes(pdf.output())
 
-# --- 5. LOGIKA NAVIGASI ---
+# --- 5. LOGIKA DATA & NAVIGASI ---
 if 'hal' not in st.session_state: st.session_state.hal = 'Menu'
 def pindah(nama): st.session_state.hal = nama
 
-@st.cache_data(ttl=60)
-def get_assets(): return supabase.table("assets").select("*").order("nama_aset").execute().data
-@st.cache_data(ttl=60)
-def get_staff(): return supabase.table("staff_me").select("*").execute().data
-@st.cache_data(ttl=60)
-def get_all_logs(): return supabase.table("maintenance_logs").select("*, assets(nama_aset, kode_qr)").order("created_at", desc=True).execute().data
+@st.cache_data(ttl=30)
+def load_data():
+    a = supabase.table("assets").select("*").order("nama_aset").execute().data
+    s = supabase.table("staff_me").select("*").execute().data
+    return a, s
 
-assets_data = get_assets()
-opt_asset = {f"{a['kode_qr']} - {a['nama_aset']}": a for a in assets_data}
-staff_data = get_staff()
-list_tek = [s['nama'] for s in staff_data if s['kategori'] == 'TEKNISI']
-list_peg = [s['nama'] for s in staff_data if s['kategori'] == 'PEGAWAI']
+assets_list, staff_list = load_data()
+opt_asset = {f"{a['kode_qr']} - {a['nama_aset']}": a for a in assets_list}
+list_tek = [s['nama'] for s in staff_list if s['kategori'] == 'TEKNISI']
+list_peg = [s['nama'] for s in staff_list if s['kategori'] == 'PEGAWAI']
 
+# --- 6. TAMPILAN ---
 st.markdown('<div class="main-header"><h1>⚡ SIMANTAP BI BALIKPAPAN</h1></div>', unsafe_allow_html=True)
 
-# --- 6. ROUTING HALAMAN ---
 if st.session_state.hal == 'Menu':
     c1, c2 = st.columns(2)
     with c1:
@@ -160,53 +164,62 @@ if st.session_state.hal == 'Menu':
 elif st.session_state.hal in ['Harian', 'Mingguan', 'Bulanan']:
     curr = st.session_state.hal
     if st.button("⬅️ KEMBALI"): pindah('Menu'); st.rerun()
-    st.subheader(f"Form Checklist {curr}")
-    sel = st.selectbox("Pilih Aset", list(opt_asset.keys()))
-    aset = opt_asset[sel]
-    with st.form("f_rutin", clear_on_submit=True):
+    st.subheader(f"Form {curr}")
+    sel_a = st.selectbox("Pilih Aset", list(opt_asset.keys()))
+    with st.form("f_run", clear_on_submit=True):
         t = st.selectbox("Teknisi", list_tek)
-        res_sow = get_sow_fields(aset['nama_aset'], curr)
-        kon = st.radio("Kondisi Akhir", ["Sangat Baik", "Baik", "Perlu Perbaikan", "Rusak"], index=1)
-        ket = st.text_area("Keterangan Tambahan")
-        pake_cam = st.checkbox("📸 Aktifkan Kamera")
-        foto = st.camera_input("Ambil Foto") if pake_cam else None
-        if st.form_submit_button("SIMPAN DATA"):
+        res_sow = get_sow_fields(opt_asset[sel_a]['nama_aset'], curr)
+        kon = st.radio("Kondisi", ["Sangat Baik", "Baik", "Perlu Perbaikan", "Rusak"], index=1)
+        ket = st.text_area("Keterangan")
+        cam = st.checkbox("📸 Kamera")
+        foto = st.camera_input("Foto") if cam else None
+        if st.form_submit_button("SIMPAN"):
             url = None
             if foto:
-                fn = f"R_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}.jpg"
+                fn = f"{curr}_{datetime.datetime.now().strftime('%m%d_%H%M%S')}.jpg"
                 supabase.storage.from_("FOTO_MAINTENANCE").upload(fn, foto.getvalue())
                 url = supabase.storage.from_("FOTO_MAINTENANCE").get_public_url(fn)
             supabase.table("maintenance_logs").insert({
-                "asset_id": aset['id'], "teknisi": t, "periode": curr,
+                "asset_id": opt_asset[sel_a]['id'], "teknisi": t, "periode": curr,
                 "checklist_data": res_sow, "kondisi": kon, "keterangan": ket, "foto_url": url
             }).execute()
-            st.success("Tersimpan!"); st.balloons()
+            st.success("Berhasil!"); st.balloons()
 
 elif st.session_state.hal == 'Export':
     if st.button("⬅️ KEMBALI"): pindah('Menu'); st.rerun()
-    st.subheader("📊 Monitoring & Export PDF")
-    logs = get_all_logs()
-    if logs:
-        df = pd.DataFrame(logs)
+    st.subheader("📊 Export Laporan PDF")
+    all_logs = supabase.table("maintenance_logs").select("*, assets(nama_aset)").order("created_at", desc=True).execute().data
+    if all_logs:
+        df = pd.DataFrame(all_logs)
         df['Nama Aset'] = df['assets'].apply(lambda x: x['nama_aset'] if x else "N/A")
         df['Tanggal'] = pd.to_datetime(df['created_at']).dt.date
         
-        # Filter Periode & Tanggal
-        c_f1, c_f2 = st.columns(2)
-        with c_f1:
-            tgl_range = st.date_input("Pilih Rentang Tanggal", [datetime.date.today() - datetime.timedelta(days=7), datetime.date.today()])
-        with c_f2:
-            f_per = st.multiselect("Filter Periode", ["Harian", "Mingguan", "Bulanan"], default=["Harian", "Mingguan", "Bulanan"])
-            
-        if len(tgl_range) == 2:
-            mask = (df['Tanggal'] >= tgl_range[0]) & (df['Tanggal'] <= tgl_range[1]) & (df['periode'].isin(f_per))
-            df_f = df[mask].copy()
+        c1, c2 = st.columns(2)
+        with c1: tgls = st.date_input("Rentang Tanggal", [datetime.date.today(), datetime.date.today()])
+        with c2: pers = st.multiselect("Periode", ["Harian", "Mingguan", "Bulanan"], default=["Harian", "Mingguan", "Bulanan"])
+        
+        if len(tgls) == 2:
+            mask = (df['Tanggal'] >= tgls[0]) & (df['Tanggal'] <= tgls[1]) & (df['periode'].isin(pers))
+            df_f = df[mask]
             st.dataframe(df_f[['Nama Aset', 'periode', 'teknisi', 'kondisi', 'Tanggal']], use_container_width=True)
             
-            n_bi = st.selectbox("Mengetahui (Staf BI)", list_peg)
-            n_tk = st.selectbox("Dibuat (Teknisi ME)", list_tek)
+            p_ttd = st.selectbox("Mengetahui (Staf BI)", list_peg)
+            t_ttd = st.selectbox("Dibuat (Teknisi)", list_tek)
             
-            if st.download_button("📥 DOWNLOAD PDF LAPORAN", generate_pdf(df_f, f"{tgl_range[0]} s/d {tgl_range[1]}", n_bi, n_tk), f"Laporan_ME_{tgl_range[0]}.pdf"):
-                st.success("Download Berhasil!")
+            if st.download_button("📥 DOWNLOAD PDF", generate_pdf(df_f, f"{tgls[0]} s/d {tgls[1]}", p_ttd, t_ttd), "Laporan_ME.pdf"):
+                st.success("Selesai!")
 
-# (Modul Lapor Gangguan & Update Perbaikan disingkat untuk menghemat ruang, gunakan yang lama jika sudah jalan)
+elif st.session_state.hal == 'Gangguan':
+    if st.button("⬅️ KEMBALI"): pindah('Menu'); st.rerun()
+    st.subheader("⚠️ Lapor Gangguan")
+    sel_g = st.selectbox("Aset", list(opt_asset.keys()))
+    with st.form("f_g"):
+        masalah = st.text_area("Masalah")
+        if st.form_submit_button("KIRIM"):
+            supabase.table("gangguan_logs").insert({"asset_id": opt_asset[sel_g]['id'], "masalah": masalah, "status": "Open"}).execute()
+            st.error("Laporan Dikirim")
+
+elif st.session_state.hal == 'Update':
+    if st.button("⬅️ KEMBALI"): pindah('Menu'); st.rerun()
+    st.subheader("🔄 Update Status")
+    st.info("Fitur ini menarik data dari Gangguan_Logs yang masih Open.")
