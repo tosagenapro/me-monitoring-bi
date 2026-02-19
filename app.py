@@ -119,7 +119,7 @@ elif st.session_state.hal == 'Gangguan':
     st.subheader("⚠️ Lapor Gangguan / Kerusakan")
     sel_a = st.selectbox("Pilih Aset", list(opt_asset.keys()))
     t = st.selectbox("Teknisi Pelapor", list_tek)
-    urg = st.selectbox("Urgensi", ["Normal", "Mendesak", "Darurat"])
+    urg = st.selectbox("Urgensi", ["Sedang", "Mendesak", "Darurat"])
     masalah = st.text_area("Deskripsi Kerusakan")
     
     foto_g = st.camera_input("Foto Kerusakan", key="cam_g")
