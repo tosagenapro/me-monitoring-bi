@@ -1,6 +1,4 @@
-# VERSI FINAL 1.1
-import streamlit as st
-# ... sisanya sama seperti kode terakhir ...
+# UPDATE VERSI LANDSCAPE + TTD DINAMIS - 19 FEB 2024
 import streamlit as st
 from supabase import create_client, Client
 import datetime
@@ -13,22 +11,21 @@ URL = st.secrets["SUPABASE_URL"]
 KEY = st.secrets["SUPABASE_KEY"]
 supabase: Client = create_client(URL, KEY)
 
-# --- FUNGSI GENERATOR PDF (VERSI LANDSCAPE - LEGA & RAPI) ---
-def generate_pdf_simantap(df, tgl):
-    # 'L' artinya Landscape
+# --- FUNGSI GENERATOR PDF (VERSI LANDSCAPE + TTD DINAMIS) ---
+def generate_pdf_simantap(df, tgl, nama_pny, jab_pny, nama_tek_pilih):
     pdf = FPDF(orientation='L', unit='mm', format='A4')
     pdf.add_page()
     
-    # Header Judul (Lebar Landscape A4 itu 297mm, margin 10mm kiri-kanan = 277mm)
+    # Header Judul
     pdf.set_font("Helvetica", "B", 16)
     pdf.cell(0, 10, "CHECKLIST HARIAN TEKNISI ME - KPwBI BALIKPAPAN", ln=True, align="C")
     pdf.set_font("Helvetica", "", 12)
     pdf.cell(0, 7, f"Tanggal Pekerjaan: {tgl}", ln=True, align="C")
     pdf.ln(5)
-    pdf.line(10, 30, 287, 30) # Garis panjang mengikuti lebar kertas
+    pdf.line(10, 30, 287, 30) 
     pdf.ln(10)
 
-    # Table Header (Total Lebar 277mm)
+    # Table Header
     pdf.set_font("Helvetica", "B", 10)
     pdf.set_fill_color(230, 230, 230)
     pdf.cell(60, 10, "Nama Aset", border=1, fill=True, align="C")
@@ -43,26 +40,36 @@ def generate_pdf_simantap(df, tgl):
         params = [f"{k}" for k, v in row.items() if k not in exclude and v == "v"]
         param_text = ", ".join(params) if params else "-"
         
-        # Nama Aset kita kasih 60mm (sangat lega)
         pdf.cell(60, 10, str(row['Nama Aset'])[:40], border=1)
         pdf.cell(35, 10, str(row['teknisi']), border=1, align="C")
         pdf.cell(35, 10, str(row['kondisi']), border=1, align="C")
-        
-        # Detail SOW kita kasih sisanya (147mm) - Pasti muat banyak teks
         pdf.cell(147, 10, param_text[:100], border=1, ln=True)
         
-    # Tanda Tangan (Di Landscape, kita bagi dua sisi kiri dan kanan)
-    pdf.set_y(-45)
+    # --- Tanda Tangan (Format BI Dinamis) ---
+    pdf.set_y(-50)
     pdf.set_font("Helvetica", "B", 10)
     
-    # Posisi Tanda Tangan
-    pdf.cell(138, 5, "Disetujui Oleh,", 0, 0, "C")
+    # Baris 1: Diketahui & Dibuat
+    pdf.cell(138, 5, "Diketahui,", 0, 0, "C")
     pdf.cell(138, 5, "Dibuat Oleh,", 0, 1, "C")
-    pdf.ln(15)
     
-    pdf.cell(138, 5, "( ................................... )", 0, 0, "C")
-    nama_tek = df['teknisi'].iloc[0] if not df.empty else "Teknisi ME"
-    pdf.cell(138, 5, f"( {nama_tek} )", 0, 1, "C")
+    # Baris 2: Jabatan
+    pdf.cell(138, 5, "Asisten Penyelia", 0, 0, "C")
+    pdf.cell(138, 5, "Teknisi ME", 0, 1, "C")
+    
+    pdf.ln(18) 
+    
+    # Baris 3: Nama (Penyelia pake Underline 'BU')
+    pdf.set_font("Helvetica", "BU", 10)
+    pdf.cell(138, 5, f"{nama_pny}", 0, 0, "C")
+    
+    pdf.set_font("Helvetica", "B", 10) # Teknisi tanpa underline
+    pdf.cell(138, 5, f"{nama_tek_pilih}", 0, 1, "C")
+    
+    # Baris 4: Jabatan/Staf
+    pdf.set_font("Helvetica", "", 10)
+    pdf.cell(138, 5, f"{jab_pny}", 0, 0, "C")
+    pdf.cell(138, 5, "", 0, 1, "C")
 
     return bytes(pdf.output())
 
@@ -224,8 +231,19 @@ with tab4:
 
             st.dataframe(df_final, use_container_width=True)
             
-            # GENERATE PDF BYTES
-            pdf_data = generate_pdf_simantap(df_final, d_pilih)
+            # --- PENGATURAN TANDA TANGAN (TAMBAHAN BARU) ---
+            st.write("### ✍️ Pengaturan Tanda Tangan")
+            col_t1, col_t2 = st.columns(2)
+            with col_t1:
+                penyelia_nama = st.selectbox("Diketahui (Asisten Penyelia):", ["Husain Muh. Asrul", "Nama Lain 1", "Nama Lain 2"])
+                penyelia_jabatan = st.text_input("Jabatan Sisi Kiri:", "Staf")
+            with col_t2:
+                # Ambil daftar teknisi yang menginput di hari terpilih saja
+                list_tek = df_final['teknisi'].unique().tolist()
+                teknisi_pilih = st.selectbox("Dibuat Oleh (Teknisi):", list_tek)
+
+            # GENERATE PDF BYTES (Dengan parameter ttd baru)
+            pdf_data = generate_pdf_simantap(df_final, d_pilih, penyelia_nama, penyelia_jabatan, teknisi_pilih)
             
             st.download_button(
                 label="📥 Download Laporan PDF (Siap Cetak)",
