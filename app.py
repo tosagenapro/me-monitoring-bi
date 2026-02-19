@@ -118,23 +118,24 @@ elif st.session_state.hal == 'Gangguan':
     if st.button("⬅️ KEMBALI"): pindah('Menu'); st.rerun()
     st.subheader("⚠️ Lapor Gangguan / Kerusakan")
     sel_a = st.selectbox("Pilih Aset", list(opt_asset.keys()))
-    t = st.selectbox("Nama Teknisi", list_tek)
+    t = st.selectbox("Teknisi Pelapor", list_tek)
+    urg = st.selectbox("Urgensi", ["Normal", "Mendesak", "Darurat"])
     masalah = st.text_area("Deskripsi Kerusakan")
     
-    foto_g = st.camera_input("Ambil Foto", key="cam_g")
-    foto_file = st.file_uploader("Atau Upload", type=['jpg', 'jpeg', 'png'])
+    foto_g = st.camera_input("Foto Kerusakan", key="cam_g")
+    foto_file = st.file_uploader("Atau Upload Foto", type=['jpg', 'jpeg', 'png'])
     
     if st.button("KIRIM LAPORAN"):
         if masalah:
             with st.spinner("Mengirim..."):
-                final_f = foto_g if foto_g else foto_file
-                url_foto = upload_foto(final_f)
+                url_foto = upload_foto(foto_g if foto_g else foto_file)
                 
-                # PERBAIKAN KOLOM: 'nama_teknisi' & 'foto_kerusakan_url'
+                # SESUAI STRUKTUR TABEL BAPAK
                 data_laporan = {
                     "asset_id": opt_asset[sel_a]['id'],
-                    "nama_teknisi": t,
+                    "teknisi": t, # Kolom pelapor Bapak
                     "masalah": masalah,
+                    "urgensi": urg,
                     "status": "Open",
                     "foto_kerusakan_url": url_foto
                 }
@@ -143,7 +144,7 @@ elif st.session_state.hal == 'Gangguan':
                     supabase.table("gangguan_logs").insert(data_laporan).execute()
                     st.success("Laporan Terkirim!"); st.balloons(); st.rerun()
                 except Exception as e:
-                    st.error("Gagal Simpan! Pastikan nama kolom di Supabase sudah sesuai.")
+                    st.error("Gagal Simpan!")
                     st.write("Detail Error:", e)
         else: st.warning("Isi deskripsi kerusakan.")
 
@@ -153,18 +154,25 @@ elif st.session_state.hal == 'Update':
     data_g = supabase.table("gangguan_logs").select("*, assets(nama_aset)").eq("status", "Open").execute().data
     if data_g:
         for g in data_g:
-            with st.expander(f"🔴 {g['assets']['nama_aset']}"):
-                st.write(f"Masalah: {g['masalah']}")
-                if g.get('foto_kerusakan_url'): st.image(g['foto_kerusakan_url'], width=250)
+            with st.expander(f"🔴 {g['assets']['nama_aset']} - {g['urgensi']}"):
+                st.write(f"**Masalah:** {g['masalah']}")
+                if g.get('foto_kerusakan_url'): st.image(g['foto_kerusakan_url'], caption="Foto Kerusakan", width=250)
                 
-                tindakan = st.text_input("Tindakan Perbaikan", key=f"t_{g['id']}")
-                if st.button(f"Selesai Diperbaiki", key=g['id']):
+                t_perbaikan = st.selectbox("Teknisi Perbaikan", list_tek, key=f"tek_{g['id']}")
+                tindakan = st.text_input("Tindakan Perbaikan", key=f"tindakan_{g['id']}")
+                foto_setelah = st.camera_input("Foto Setelah Perbaikan", key=f"cam_after_{g['id']}")
+                
+                if st.button(f"Update Selesai", key=f"btn_{g['id']}"):
                     if tindakan:
+                        url_after = upload_foto(foto_setelah)
                         supabase.table("gangguan_logs").update({
                             "status": "Closed",
-                            "tindakan_perbaikan": tindakan
+                            "tindakan_perbaikan": tindakan,
+                            "teknisi_perbaikan": t_perbaikan,
+                            "tgl_perbaikan": datetime.datetime.now().isoformat(),
+                            "foto_setelah_perbaikan_url": url_after
                         }).eq("id", g['id']).execute()
-                        st.success("Tersimpan!"); st.rerun()
+                        st.success("Perbaikan Berhasil Disimpan!"); st.rerun()
                     else: st.warning("Isi tindakan perbaikan.")
     else: st.info("Tidak ada gangguan aktif.")
 
@@ -181,7 +189,7 @@ elif st.session_state.hal in ['Harian', 'Mingguan', 'Bulanan']:
                 "asset_id": opt_asset[sel_a]['id'], "teknisi": t, 
                 "periode": st.session_state.hal, "kondisi": kon, "keterangan": ket
             }).execute()
-            st.success("Data Tersimpan!"); st.rerun()
+            st.success("Tersimpan!"); st.rerun()
 
 elif st.session_state.hal == 'Export':
     if st.button("⬅️ KEMBALI"): pindah('Menu'); st.rerun()
@@ -192,7 +200,9 @@ elif st.session_state.hal == 'Export':
         df['Nama Aset'] = df['assets'].apply(lambda x: x['nama_aset'] if x else "N/A")
         tgl_r = st.date_input("Rentang Tanggal", [datetime.date.today(), datetime.date.today()])
         if len(tgl_r) == 2:
-            df_f = df[(pd.to_datetime(df['created_at']).dt.date >= tgl_r[0]) & (pd.to_datetime(df['created_at']).dt.date <= tgl_r[1])]
+            mask = (pd.to_datetime(df['created_at']).dt.date >= tgl_r[0]) & (pd.to_datetime(df['created_at']).dt.date <= tgl_r[1])
+            df_f = df.loc[mask]
+            st.dataframe(df_f[['Nama Aset', 'periode', 'teknisi', 'kondisi', 'created_at']], use_container_width=True)
             p_sel = st.selectbox("Diketahui", list_peg)
             t_sel = st.selectbox("Dibuat", list_tek)
             if not df_f.empty:
