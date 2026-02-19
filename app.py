@@ -1,4 +1,3 @@
-# UPDATE VERSI LANDSCAPE + TTD DINAMIS - 19 FEB 2024
 import streamlit as st
 from supabase import create_client, Client
 import datetime
@@ -11,75 +10,7 @@ URL = st.secrets["SUPABASE_URL"]
 KEY = st.secrets["SUPABASE_KEY"]
 supabase: Client = create_client(URL, KEY)
 
-# --- FUNGSI GENERATOR PDF (VERSI LANDSCAPE + TTD DINAMIS) ---
-def generate_pdf_simantap(df, tgl, nama_pny, jab_pny, nama_tek_pilih):
-    pdf = FPDF(orientation='L', unit='mm', format='A4')
-    pdf.add_page()
-    
-    # Header Judul
-    pdf.set_font("Helvetica", "B", 16)
-    pdf.cell(0, 10, "CHECKLIST HARIAN TEKNISI ME - KPwBI BALIKPAPAN", ln=True, align="C")
-    pdf.set_font("Helvetica", "", 12)
-    pdf.cell(0, 7, f"Tanggal Pekerjaan: {tgl}", ln=True, align="C")
-    pdf.ln(5)
-    pdf.line(10, 30, 287, 30) 
-    pdf.ln(10)
-
-    # Table Header
-    pdf.set_font("Helvetica", "B", 10)
-    pdf.set_fill_color(230, 230, 230)
-    pdf.cell(60, 10, "Nama Aset", border=1, fill=True, align="C")
-    pdf.cell(35, 10, "Teknisi", border=1, fill=True, align="C")
-    pdf.cell(35, 10, "Kondisi", border=1, fill=True, align="C")
-    pdf.cell(147, 10, "Detail Parameter SOW (V = Normal/Sudah)", border=1, fill=True, align="C", ln=True)
-
-    # Table Body
-    pdf.set_font("Helvetica", "", 9)
-    for _, row in df.iterrows():
-        exclude = ['Nama Aset', 'teknisi', 'kondisi', 'keterangan', 'Tanggal']
-        params = [f"{k}" for k, v in row.items() if k not in exclude and v == "v"]
-        param_text = ", ".join(params) if params else "-"
-        
-        pdf.cell(60, 10, str(row['Nama Aset'])[:40], border=1)
-        pdf.cell(35, 10, str(row['teknisi']), border=1, align="C")
-        pdf.cell(35, 10, str(row['kondisi']), border=1, align="C")
-        pdf.cell(147, 10, param_text[:100], border=1, ln=True)
-        
-    # --- Tanda Tangan (Format BI Dinamis) ---
-    pdf.set_y(-50)
-    pdf.set_font("Helvetica", "B", 10)
-    
-    # Baris 1: Diketahui & Dibuat
-    pdf.cell(138, 5, "Diketahui,", 0, 0, "C")
-    pdf.cell(138, 5, "Dibuat Oleh,", 0, 1, "C")
-    
-    # Baris 2: Jabatan
-    pdf.cell(138, 5, "Asisten Penyelia", 0, 0, "C")
-    pdf.cell(138, 5, "Teknisi ME", 0, 1, "C")
-    
-    pdf.ln(18) 
-    
-    # Baris 3: Nama (Penyelia pake Underline 'BU')
-    pdf.set_font("Helvetica", "BU", 10)
-    pdf.cell(138, 5, f"{nama_pny}", 0, 0, "C")
-    
-    pdf.set_font("Helvetica", "B", 10) # Teknisi tanpa underline
-    pdf.cell(138, 5, f"{nama_tek_pilih}", 0, 1, "C")
-    
-    # Baris 4: Jabatan/Staf
-    pdf.set_font("Helvetica", "", 10)
-    pdf.cell(138, 5, f"{jab_pny}", 0, 0, "C")
-    pdf.cell(138, 5, "", 0, 1, "C")
-
-    return bytes(pdf.output())
-
-# --- TAMPILAN JUDUL APLIKASI ---
-st.title("🚀 SIMANTAP BI BPP")
-st.markdown("### Sistem Informasi Monitoring dan Aplikasi Pemeliharaan ME")
-st.markdown("##### KPwBI Balikpapan")
-st.write("---")
-
-# --- FUNGSI AMBIL DATA ---
+# --- FUNGSI AMBIL DATA DARI DATABASE ---
 def get_assets():
     return supabase.table("assets").select("id, nama_aset, kategori, kode_qr").order("nama_aset").execute().data
 
@@ -88,6 +19,72 @@ def get_open_issues():
 
 def get_all_maintenance_logs():
     return supabase.table("maintenance_logs").select("*, assets(nama_aset, kode_qr)").order("created_at", desc=True).execute().data
+
+def get_staff_data():
+    return supabase.table("staff_me").select("*").execute().data
+
+# --- FUNGSI GENERATOR PDF (FORMAT RESMI BI - LANDSCAPE) ---
+def generate_pdf_simantap(df, tgl, p_sel, t_sel):
+    # p_sel & t_sel adalah dictionary data lengkap dari database staff_me
+    pdf = FPDF(orientation='L', unit='mm', format='A4')
+    pdf.set_margins(10, 10, 10)
+    pdf.add_page()
+    
+    # Header Judul
+    pdf.set_font("Helvetica", "B", 14)
+    pdf.cell(0, 8, "CHECKLIST HARIAN TEKNISI ME - KPwBI BALIKPAPAN", ln=True, align="C")
+    pdf.set_font("Helvetica", "", 10)
+    pdf.cell(0, 6, f"Tanggal Pekerjaan: {tgl}", ln=True, align="C")
+    pdf.ln(3)
+    pdf.line(10, 26, 287, 26) 
+    pdf.ln(5)
+
+    # Table Header
+    pdf.set_font("Helvetica", "B", 9)
+    pdf.set_fill_color(230, 230, 230)
+    pdf.cell(60, 8, "Nama Aset", border=1, fill=True, align="C")
+    pdf.cell(35, 8, "Teknisi", border=1, fill=True, align="C")
+    pdf.cell(35, 8, "Kondisi", border=1, fill=True, align="C")
+    pdf.cell(147, 8, "Detail Parameter SOW", border=1, fill=True, align="C", ln=True)
+
+    # Table Body
+    pdf.set_font("Helvetica", "", 8)
+    for _, row in df.iterrows():
+        exclude = ['Nama Aset', 'teknisi', 'kondisi', 'keterangan', 'Tanggal']
+        params = [f"{k}" for k, v in row.items() if k not in exclude and v == "v"]
+        param_text = ", ".join(params) if params else "-"
+        
+        pdf.cell(60, 7, str(row['Nama Aset'])[:40], border=1)
+        pdf.cell(35, 7, str(row['teknisi']), border=1, align="C")
+        pdf.cell(35, 7, str(row['kondisi']), border=1, align="C")
+        pdf.cell(147, 7, param_text[:110], border=1, ln=True)
+        
+    # --- FORMAT TANDA TANGAN DINAMIS ---
+    pdf.set_y(-55) 
+    pdf.set_font("Helvetica", "B", 9)
+    
+    # Baris 1: Judul
+    pdf.cell(138, 5, "Diketahui,", 0, 0, "C")
+    pdf.cell(138, 5, "Dibuat Oleh,", 0, 1, "C")
+    
+    # Baris 2: Posisi Pegawai & Nama CV Permanen
+    pdf.cell(138, 5, f"{p_sel['posisi']}", 0, 0, "C")
+    pdf.cell(138, 5, "CV. INDO MEGA JAYA", 0, 1, "C")
+    
+    pdf.ln(16) # Ruang Tanda Tangan
+    
+    # Baris 3: Nama (Keduanya Garis Bawah / Underline)
+    pdf.set_font("Helvetica", "BU", 9)
+    pdf.cell(138, 5, f"{p_sel['nama']}", 0, 0, "C")
+    pdf.cell(138, 5, f"{t_sel['nama']}", 0, 1, "C")
+    
+    # Baris 4: Jabatan_pdf Pegawai & Posisi Teknisi
+    pdf.set_font("Helvetica", "", 9)
+    jab_bi = p_sel['jabatan_pdf'] if p_sel['jabatan_pdf'] else ""
+    pdf.cell(138, 5, f"{jab_bi}", 0, 0, "C")
+    pdf.cell(138, 5, f"{t_sel['posisi']}", 0, 1, "C")
+
+    return bytes(pdf.output())
 
 # --- FUNGSI CHECKLIST SOW ---
 def render_sow_checklist(nama_unit):
@@ -128,79 +125,108 @@ def render_sow_checklist(nama_unit):
         ck['Catatan'] = st.text_area("Detail Pengecekan Umum")
     return ck
 
-# --- PREPARASI DATA ASET ---
+# --- MAIN APP ---
+st.title("🚀 SIMANTAP BI BPP")
+st.markdown("### Sistem Informasi Monitoring dan Aplikasi Pemeliharaan ME")
+st.markdown("##### KPwBI Balikpapan")
+st.write("---")
+
 asset_data = get_assets()
 options = {f"{a['kode_qr']} - {a['nama_aset']}": a for a in asset_data}
 
-# --- SISTEM TAB ---
 tab1, tab2, tab3, tab4 = st.tabs(["📋 Checklist Rutin", "⚠️ Lapor Gangguan", "✅ Update Perbaikan", "📊 Dashboard & Export"])
 
 with tab1:
-    selected_label = st.selectbox("Pilih Aset (Rutin)", options=list(options.keys()), key="sel_r1")
+    staff_data = get_staff_data()
+    # List teknisi untuk dropdown input agar tidak typo
+    list_tek_input = [s['nama'] for s in staff_data if s['kategori'] == 'TEKNISI']
+    
+    selected_label = st.selectbox("Pilih Aset (Rutin)", options=list(options.keys()))
     selected_asset = options[selected_label]
+    
     with st.form("form_rutin_final", clear_on_submit=True):
-        nama_teknisi = st.text_input("Nama Teknisi")
+        nama_teknisi = st.selectbox("Nama Teknisi", options=list_tek_input)
         results = render_sow_checklist(selected_asset['nama_aset'])
         st.write("---")
         kondisi_final = st.radio("Kesimpulan Kondisi Akhir", ["Sangat Baik", "Baik", "Perlu Perbaikan", "Rusak"])
         tindakan = st.text_area("Keterangan Tambahan")
-        foto = st.camera_input("Ambil Foto Bukti", key="cam_r1")
+        foto = st.camera_input("Ambil Foto Bukti")
+        
         if st.form_submit_button("Simpan Laporan SOW"):
-            if nama_teknisi:
-                url_f = None
-                if foto:
-                    fn = f"SOW_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}.jpg"
-                    supabase.storage.from_("foto_maintenance").upload(fn, foto.getvalue())
-                    url_f = supabase.storage.from_("foto_maintenance").get_public_url(fn)
-                payload = {"asset_id": selected_asset['id'], "teknisi": nama_teknisi, "kondisi": kondisi_final, "keterangan": tindakan, "foto_url": url_f, "checklist_data": results}
-                supabase.table("maintenance_logs").insert(payload).execute()
-                st.success(f"Laporan {selected_label} Berhasil Disimpan!")
-                st.balloons()
-            else: st.error("Nama Teknisi wajib diisi!")
+            url_f = None
+            if foto:
+                fn = f"SOW_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}.jpg"
+                supabase.storage.from_("foto_maintenance").upload(fn, foto.getvalue())
+                url_f = supabase.storage.from_("foto_maintenance").get_public_url(fn)
+            
+            payload = {
+                "asset_id": selected_asset['id'], 
+                "teknisi": nama_teknisi, 
+                "kondisi": kondisi_final, 
+                "keterangan": tindakan, 
+                "foto_url": url_f, 
+                "checklist_data": results
+            }
+            supabase.table("maintenance_logs").insert(payload).execute()
+            st.success("Laporan Berhasil Disimpan!")
+            st.balloons()
 
 with tab2:
     st.warning("Hanya untuk laporan kerusakan mendadak!")
     sel_gng = st.selectbox("Pilih Aset Bermasalah", options=list(options.keys()), key="sel_g2")
     aset_gng = options[sel_gng]
     with st.form("form_gangguan_final", clear_on_submit=True):
-        pelapor = st.text_input("Nama Pelapor/Teknisi")
+        # Gunakan dropdown teknisi juga di sini
+        pelapor = st.selectbox("Nama Pelapor/Teknisi", options=list_tek_input)
         masalah = st.text_area("Deskripsi Kerusakan")
         urgensi = st.select_slider("Tingkat Urgensi", options=["Rendah", "Sedang", "Darurat"])
-        foto_gng = st.camera_input("Foto Bukti Kerusakan", key="cam_g2")
+        foto_gng = st.camera_input("Foto Bukti Kerusakan")
         if st.form_submit_button("KIRIM LAPORAN DARURAT"):
-            if pelapor and masalah:
-                url_g = None
-                if foto_gng:
-                    fn_g = f"GNG_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}.jpg"
-                    supabase.storage.from_("foto_maintenance").upload(fn_g, foto_gng.getvalue())
-                    url_g = supabase.storage.from_("foto_maintenance").get_public_url(fn_g)
-                payload_g = {"asset_id": aset_gng['id'], "teknisi": pelapor, "masalah": masalah, "urgensi": urgensi, "status": "Open", "foto_kerusakan_url": url_g}
-                supabase.table("gangguan_logs").insert(payload_g).execute()
-                st.error("Laporan Gangguan telah dikirim ke Database!")
-            else: st.warning("Nama dan Detail Masalah wajib diisi!")
+            url_g = None
+            if foto_gng:
+                fn_g = f"GNG_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}.jpg"
+                supabase.storage.from_("foto_maintenance").upload(fn_g, foto_gng.getvalue())
+                url_g = supabase.storage.from_("foto_maintenance").get_public_url(fn_g)
+            
+            payload_g = {
+                "asset_id": aset_gng['id'], 
+                "teknisi": pelapor, 
+                "masalah": masalah, 
+                "urgensi": urgensi, 
+                "status": "Open", 
+                "foto_kerusakan_url": url_g
+            }
+            supabase.table("gangguan_logs").insert(payload_g).execute()
+            st.error("Laporan Gangguan telah dikirim!")
 
 with tab3:
     st.subheader("Penyelesaian Laporan Kerusakan")
     issues = get_open_issues()
-    if not issues: st.info("Alhamdulillah, semua aset dalam kondisi aman.")
+    if not issues:
+        st.info("Semua aset dalam kondisi aman.")
     else:
         issue_options = {f"[{i['urgensi']}] {i['assets']['nama_aset']} - {i['masalah'][:30]}...": i for i in issues}
         sel_issue_label = st.selectbox("Pilih Laporan Selesai", options=list(issue_options.keys()))
         issue_data = issue_options[sel_issue_label]
         with st.form("form_perbaikan_final"):
-            t_perbaikan = st.text_input("Nama Teknisi Perbaikan")
+            t_perbaikan = st.selectbox("Nama Teknisi Perbaikan", options=list_tek_input)
             tindakan_p = st.text_area("Tindakan/Kronologi Perbaikan")
-            f_after = st.camera_input("Foto After", key="cam_p3")
+            f_after = st.camera_input("Foto After")
             if st.form_submit_button("Update Status: SELESAI"):
-                if t_perbaikan and tindakan_p:
-                    url_a = None
-                    if f_after:
-                        fn_a = f"FIX_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}.jpg"
-                        supabase.storage.from_("foto_maintenance").upload(fn_a, f_after.getvalue())
-                        url_a = supabase.storage.from_("foto_maintenance").get_public_url(fn_a)
-                    supabase.table("gangguan_logs").update({"status": "Resolved", "tindakan_perbaikan": tindakan_p, "teknisi_perbaikan": t_perbaikan, "tgl_perbaikan": datetime.datetime.now().isoformat(), "foto_setelah_perbaikan_url": url_a}).eq("id", issue_data['id']).execute()
-                    st.success("Status Aset kembali Normal!")
-                    st.balloons()
+                url_a = None
+                if f_after:
+                    fn_a = f"FIX_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}.jpg"
+                    supabase.storage.from_("foto_maintenance").upload(fn_a, f_after.getvalue())
+                    url_a = supabase.storage.from_("foto_maintenance").get_public_url(fn_a)
+                
+                supabase.table("gangguan_logs").update({
+                    "status": "Resolved", 
+                    "tindakan_perbaikan": tindakan_p, 
+                    "teknisi_perbaikan": t_perbaikan, 
+                    "tgl_perbaikan": datetime.datetime.now().isoformat(), 
+                    "foto_setelah_perbaikan_url": url_a
+                }).eq("id", issue_data['id']).execute()
+                st.success("Status Aset kembali Normal!")
 
 with tab4:
     st.subheader("📊 Dashboard & Penarikan Laporan")
@@ -217,10 +243,11 @@ with tab4:
         
         st.write("---")
         st.write("### 🔍 Tarik Laporan Harian")
-        d_pilih = st.date_input("Pilih Tanggal Laporan", datetime.date.today(), key="dash_tgl")
+        d_pilih = st.date_input("Pilih Tanggal Laporan", datetime.date.today())
         df_filtered = df[df['Tanggal'] == d_pilih].copy()
 
         if not df_filtered.empty:
+            # Formatting data table
             checklist_df = pd.json_normalize(df_filtered['checklist_data'])
             df_final = pd.concat([df_filtered[['Nama Aset', 'teknisi', 'kondisi', 'keterangan']].reset_index(drop=True), checklist_df.reset_index(drop=True)], axis=1)
             
@@ -231,25 +258,28 @@ with tab4:
 
             st.dataframe(df_final, use_container_width=True)
             
-            # --- PENGATURAN TANDA TANGAN (TAMBAHAN BARU) ---
-            st.write("### ✍️ Pengaturan Tanda Tangan")
-            col_t1, col_t2 = st.columns(2)
-            with col_t1:
-                penyelia_nama = st.selectbox("Diketahui (Asisten Penyelia):", ["Husain Muh. Asrul", "Nama Lain 1", "Nama Lain 2"])
-                penyelia_jabatan = st.text_input("Jabatan Sisi Kiri:", "Staf")
-            with col_t2:
-                # Ambil daftar teknisi yang menginput di hari terpilih saja
-                list_tek = df_final['teknisi'].unique().tolist()
-                teknisi_pilih = st.selectbox("Dibuat Oleh (Teknisi):", list_tek)
+            # --- PENGATURAN TANDA TANGAN (DATABASE STAFF) ---
+            st.write("### ✍️ Konfirmasi Tanda Tangan Laporan")
+            staff_all = get_staff_data()
+            pegawai_bi = [s for s in staff_all if s['kategori'] == 'PEGAWAI']
+            teknisi_me = [s for s in staff_all if s['kategori'] == 'TEKNISI']
+            
+            col_sign1, col_sign2 = st.columns(2)
+            with col_sign1:
+                n_bi = st.selectbox("Pilih Pegawai BI (Diketahui):", [s['nama'] for s in pegawai_bi])
+                p_sel = [s for s in pegawai_bi if s['nama'] == n_bi][0]
+            with col_sign2:
+                n_tek = st.selectbox("Pilih Teknisi (Dibuat):", [s['nama'] for s in teknisi_me])
+                t_sel = [s for s in teknisi_me if s['nama'] == n_tek][0]
 
-            # GENERATE PDF BYTES (Dengan parameter ttd baru)
-            pdf_data = generate_pdf_simantap(df_final, d_pilih, penyelia_nama, penyelia_jabatan, teknisi_pilih)
+            # Generate PDF
+            pdf_data = generate_pdf_simantap(df_final, d_pilih, p_sel, t_sel)
             
             st.download_button(
-                label="📥 Download Laporan PDF (Siap Cetak)",
+                label="📥 Download Laporan PDF (Landscape Resmi)",
                 data=pdf_data,
                 file_name=f"Laporan_SIMANTAP_{d_pilih}.pdf",
-                mime="application/pdf",
-                key="btn_pdf_final"
+                mime="application/pdf"
             )
-        else: st.warning(f"Tidak ada data pada {d_pilih}")
+        else:
+            st.warning(f"Tidak ada data pada tanggal {d_pilih}")
