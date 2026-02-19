@@ -23,10 +23,11 @@ def get_all_maintenance_logs():
 def get_staff_data():
     return supabase.table("staff_me").select("*").execute().data
 
-# --- FUNGSI GENERATOR PDF (FORMAT RESMI BI - LANDSCAPE) ---
+# --- FUNGSI GENERATOR PDF (VERSI SEMPURNA: ANTI-POTONG + DYNAMIC PAGE) ---
 def generate_pdf_simantap(df, tgl, p_sel, t_sel):
-    # p_sel & t_sel adalah dictionary data lengkap dari database staff_me
     pdf = FPDF(orientation='L', unit='mm', format='A4')
+    # Auto page break aktif: Jika tabel sangat panjang, dia akan lanjut ke hal 2 otomatis
+    pdf.set_auto_page_break(auto=True, margin=20) 
     pdf.set_margins(10, 10, 10)
     pdf.add_page()
     
@@ -59,34 +60,44 @@ def generate_pdf_simantap(df, tgl, p_sel, t_sel):
         pdf.cell(35, 7, str(row['kondisi']), border=1, align="C")
         pdf.cell(147, 7, param_text[:110], border=1, ln=True)
         
-    # --- FORMAT TANDA TANGAN DINAMIS ---
-    pdf.set_y(-55) 
+    # --- LOGIKA TANDA TANGAN DINAMIS (ANTI-TERPOTONG) ---
+    # Ukur sisa ruang dari posisi kursor (y) sampai batas bawah (210mm)
+    sisa_ruang = 210 - pdf.get_y()
+    
+    # Jika sisa ruang kurang dari 55mm, kita paksa pindah halaman baru biar TTD tidak gantung
+    if sisa_ruang < 55:
+        pdf.add_page()
+        pdf.ln(10)
+    else:
+        pdf.ln(10) # Jarak aman antara tabel dan TTD
+
+    # Mulai Cetak Blok Tanda Tangan
     pdf.set_font("Helvetica", "B", 9)
     
     # Baris 1: Judul
     pdf.cell(138, 5, "Diketahui,", 0, 0, "C")
     pdf.cell(138, 5, "Dibuat Oleh,", 0, 1, "C")
     
-    # Baris 2: Posisi Pegawai & Nama CV Permanen
+    # Baris 2: Posisi Pegawai & Nama CV (Permanen)
     pdf.cell(138, 5, f"{p_sel['posisi']}", 0, 0, "C")
     pdf.cell(138, 5, "CV. INDO MEGA JAYA", 0, 1, "C")
     
     pdf.ln(16) # Ruang Tanda Tangan
     
-    # Baris 3: Nama (Keduanya Garis Bawah / Underline)
+    # Baris 3: Nama (Garis Bawah / Underline)
     pdf.set_font("Helvetica", "BU", 9)
     pdf.cell(138, 5, f"{p_sel['nama']}", 0, 0, "C")
     pdf.cell(138, 5, f"{t_sel['nama']}", 0, 1, "C")
     
     # Baris 4: Jabatan_pdf Pegawai & Posisi Teknisi
     pdf.set_font("Helvetica", "", 9)
-    jab_bi = p_sel['jabatan_pdf'] if p_sel['jabatan_pdf'] else ""
+    jab_bi = p_sel['jabatan_pdf'] if p_sel['jabatan_pdf'] and p_sel['jabatan_pdf'] != 'None' else ""
     pdf.cell(138, 5, f"{jab_bi}", 0, 0, "C")
     pdf.cell(138, 5, f"{t_sel['posisi']}", 0, 1, "C")
 
     return bytes(pdf.output())
 
-# --- FUNGSI CHECKLIST SOW ---
+# --- FUNGSI CHECKLIST SOW (TETAP SAMA) ---
 def render_sow_checklist(nama_unit):
     st.info(f"📋 Parameter SOW: {nama_unit}")
     ck = {}
@@ -125,7 +136,7 @@ def render_sow_checklist(nama_unit):
         ck['Catatan'] = st.text_area("Detail Pengecekan Umum")
     return ck
 
-# --- MAIN APP ---
+# --- MAIN APP UI ---
 st.title("🚀 SIMANTAP BI BPP")
 st.markdown("### Sistem Informasi Monitoring dan Aplikasi Pemeliharaan ME")
 st.markdown("##### KPwBI Balikpapan")
@@ -136,9 +147,9 @@ options = {f"{a['kode_qr']} - {a['nama_aset']}": a for a in asset_data}
 
 tab1, tab2, tab3, tab4 = st.tabs(["📋 Checklist Rutin", "⚠️ Lapor Gangguan", "✅ Update Perbaikan", "📊 Dashboard & Export"])
 
+# --- TAB 1: INPUT ---
 with tab1:
     staff_data = get_staff_data()
-    # List teknisi untuk dropdown input agar tidak typo
     list_tek_input = [s['nama'] for s in staff_data if s['kategori'] == 'TEKNISI']
     
     selected_label = st.selectbox("Pilih Aset (Rutin)", options=list(options.keys()))
@@ -171,12 +182,12 @@ with tab1:
             st.success("Laporan Berhasil Disimpan!")
             st.balloons()
 
+# --- TAB 2 & 3: (Fungsinya sama seperti kode Bapak, sudah disesuaikan dropdown teknisinya) ---
 with tab2:
     st.warning("Hanya untuk laporan kerusakan mendadak!")
     sel_gng = st.selectbox("Pilih Aset Bermasalah", options=list(options.keys()), key="sel_g2")
     aset_gng = options[sel_gng]
     with st.form("form_gangguan_final", clear_on_submit=True):
-        # Gunakan dropdown teknisi juga di sini
         pelapor = st.selectbox("Nama Pelapor/Teknisi", options=list_tek_input)
         masalah = st.text_area("Deskripsi Kerusakan")
         urgensi = st.select_slider("Tingkat Urgensi", options=["Rendah", "Sedang", "Darurat"])
@@ -188,14 +199,7 @@ with tab2:
                 supabase.storage.from_("foto_maintenance").upload(fn_g, foto_gng.getvalue())
                 url_g = supabase.storage.from_("foto_maintenance").get_public_url(fn_g)
             
-            payload_g = {
-                "asset_id": aset_gng['id'], 
-                "teknisi": pelapor, 
-                "masalah": masalah, 
-                "urgensi": urgensi, 
-                "status": "Open", 
-                "foto_kerusakan_url": url_g
-            }
+            payload_g = {"asset_id": aset_gng['id'], "teknisi": pelapor, "masalah": masalah, "urgensi": urgensi, "status": "Open", "foto_kerusakan_url": url_g}
             supabase.table("gangguan_logs").insert(payload_g).execute()
             st.error("Laporan Gangguan telah dikirim!")
 
@@ -219,15 +223,10 @@ with tab3:
                     supabase.storage.from_("foto_maintenance").upload(fn_a, f_after.getvalue())
                     url_a = supabase.storage.from_("foto_maintenance").get_public_url(fn_a)
                 
-                supabase.table("gangguan_logs").update({
-                    "status": "Resolved", 
-                    "tindakan_perbaikan": tindakan_p, 
-                    "teknisi_perbaikan": t_perbaikan, 
-                    "tgl_perbaikan": datetime.datetime.now().isoformat(), 
-                    "foto_setelah_perbaikan_url": url_a
-                }).eq("id", issue_data['id']).execute()
+                supabase.table("gangguan_logs").update({"status": "Resolved", "tindakan_perbaikan": tindakan_p, "teknisi_perbaikan": t_perbaikan, "tgl_perbaikan": datetime.datetime.now().isoformat(), "foto_setelah_perbaikan_url": url_a}).eq("id", issue_data['id']).execute()
                 st.success("Status Aset kembali Normal!")
 
+# --- TAB 4: DASHBOARD & EXPORT ---
 with tab4:
     st.subheader("📊 Dashboard & Penarikan Laporan")
     raw_logs = get_all_maintenance_logs()
@@ -247,7 +246,6 @@ with tab4:
         df_filtered = df[df['Tanggal'] == d_pilih].copy()
 
         if not df_filtered.empty:
-            # Formatting data table
             checklist_df = pd.json_normalize(df_filtered['checklist_data'])
             df_final = pd.concat([df_filtered[['Nama Aset', 'teknisi', 'kondisi', 'keterangan']].reset_index(drop=True), checklist_df.reset_index(drop=True)], axis=1)
             
@@ -258,7 +256,6 @@ with tab4:
 
             st.dataframe(df_final, use_container_width=True)
             
-            # --- PENGATURAN TANDA TANGAN (DATABASE STAFF) ---
             st.write("### ✍️ Konfirmasi Tanda Tangan Laporan")
             staff_all = get_staff_data()
             pegawai_bi = [s for s in staff_all if s['kategori'] == 'PEGAWAI']
@@ -272,14 +269,14 @@ with tab4:
                 n_tek = st.selectbox("Pilih Teknisi (Dibuat):", [s['nama'] for s in teknisi_me])
                 t_sel = [s for s in teknisi_me if s['nama'] == n_tek][0]
 
-            # Generate PDF
             pdf_data = generate_pdf_simantap(df_final, d_pilih, p_sel, t_sel)
             
             st.download_button(
                 label="📥 Download Laporan PDF (Landscape Resmi)",
                 data=pdf_data,
                 file_name=f"Laporan_SIMANTAP_{d_pilih}.pdf",
-                mime="application/pdf"
+                mime="application/pdf",
+                key="download_pdf_final"
             )
         else:
             st.warning(f"Tidak ada data pada tanggal {d_pilih}")
