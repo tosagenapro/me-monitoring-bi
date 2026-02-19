@@ -42,40 +42,46 @@ SOW_MASTER = {
     }
 }
 
-# --- 3. CSS CUSTOM (VERSI STERIL - RASA NATIVE APP) ---
+# --- 3. CSS CUSTOM (CLEAN & TACTICAL) ---
 st.markdown("""
     <style>
-    /* Menghilangkan Jejak Streamlit */
     #MainMenu {visibility: hidden;}
     footer {visibility: hidden;}
     header {visibility: hidden;}
     
     .stApp { background: #0f172a; }
     
-    /* Container Header Utama */
+    /* Header Utama lebih Slim & Modern */
     .main-header { 
-        text-align: center; padding: 25px; background: #1e293b; 
-        border: 2px solid #334155; border-radius: 15px; margin-bottom: 30px; 
+        text-align: center; padding: 20px; background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%); 
+        border-bottom: 3px solid #38bdf8; border-radius: 0 0 20px 20px; margin-bottom: 30px; 
     }
-    .main-header h1 { color: #38bdf8; margin: 0; font-size: 2rem; letter-spacing: 3px; font-weight: 800; }
-    .main-header p { color: #94a3b8; margin: 8px 0 0 0; font-size: 0.95rem; font-style: italic; letter-spacing: 1px; }
+    .main-header h1 { color: #38bdf8; margin: 0; font-size: 1.8rem; font-weight: 800; text-shadow: 0 0 10px rgba(56, 189, 248, 0.3); }
+    .main-header p { color: #94a3b8; margin: 5px 0 0 0; font-size: 0.85rem; letter-spacing: 1px; }
     
-    /* Tombol Menu Grid */
+    /* Tombol Menu ala Dashboard Modern */
     div.stButton > button { 
-        width: 100%; height: 75px !important; background: #1e293b !important; 
-        border: 1px solid #334155 !important; border-radius: 12px !important; 
-        color: #38bdf8 !important; font-weight: bold !important; font-size: 0.95rem !important;
-        margin-bottom: 10px;
+        width: 100%; height: 80px !important; background: #1e293b !important; 
+        border: 1px solid #334155 !important; border-radius: 15px !important; 
+        color: #f8fafc !important; font-weight: bold !important; font-size: 1rem !important;
+        transition: all 0.3s ease;
     }
-    div.stButton > button:hover { border-color: #38bdf8 !important; background: #0f172a !important; box-shadow: 0 4px 15px rgba(56, 189, 248, 0.2); }
+    div.stButton > button:hover { 
+        border-color: #38bdf8 !important; color: #38bdf8 !important;
+        transform: translateY(-3px); box-shadow: 0 10px 20px rgba(0,0,0,0.4);
+    }
     
-    /* Form & Label */
-    label { color: #38bdf8 !important; font-weight: bold !important; }
-    .stTabs [data-baseweb="tab-list"] { gap: 15px; }
-    .stTabs [data-baseweb="tab"] { background-color: #1e293b; border-radius: 8px; color: white; padding: 10px 20px; }
+    /* Input Form agar lebih rapi (UX) */
+    .stSelectbox, .stTextInput, .stTextArea {
+        background-color: #1e293b !important; border-radius: 10px !important;
+    }
     
-    /* Optimalisasi Jarak Mobile */
-    .block-container { padding-top: 1.5rem !important; padding-bottom: 1rem !important; }
+    /* Highlight Area Input (Gojek Vibes) */
+    div[data-testid="stForm"] {
+        background: #1e293b; border-radius: 20px; padding: 20px; border: 1px solid #334155;
+    }
+    
+    label { color: #38bdf8 !important; font-size: 0.9rem !important; margin-bottom: 5px !important; }
     </style>
     """, unsafe_allow_html=True)
 
