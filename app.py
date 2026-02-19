@@ -136,11 +136,11 @@ if st.session_state.hal == 'Menu':
     with c2:
         if st.button("⚠️ LAPOR GANGGUAN"): pindah('Gangguan'); st.rerun()
         if st.button("🔄 UPDATE PERBAIKAN"): pindah('Update'); st.rerun()
-        if st.button("📑 DASHBOARD & PDF"): pindah('Export'); st.rerun()
+        if st.button("📑 EXPORT PDF"): pindah('Export'); st.rerun()
 
 elif st.session_state.hal == 'Statistik':
     if st.button("⬅️ KEMBALI"): pindah('Menu'); st.rerun()
-    st.subheader("📊 Statistik Kondisi Gedung")
+    st.subheader("📊 Statistik Kondisi Perangkat")
     logs = supabase.table("maintenance_logs").select("*, assets(nama_aset)").execute().data
     if logs:
         df_s = pd.DataFrame(logs)
