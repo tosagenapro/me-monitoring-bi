@@ -12,7 +12,7 @@ URL = st.secrets["SUPABASE_URL"]
 KEY = st.secrets["SUPABASE_KEY"]
 supabase: Client = create_client(URL, KEY)
 
-# --- 2. CSS CUSTOM (Menyesuaikan Foto Menu Bapak) ---
+# --- 2. CSS CUSTOM ---
 st.markdown("""
     <style>
     header {visibility: hidden;}
@@ -22,8 +22,6 @@ st.markdown("""
         border: 1px solid #334155; border-radius: 10px; margin-bottom: 25px; 
     }
     .main-header h1 { color: #94a3b8; margin: 0; font-size: 1.4rem; letter-spacing: 2px; }
-    
-    /* Style Tombol agar mirip di Foto */
     div.stButton > button { 
         width: 100%; height: 70px !important; background: #1e293b !important; 
         border: 1px solid #334155 !important; border-radius: 8px !important; 
@@ -34,7 +32,7 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-# --- 3. FUNGSI GENERATE PDF (FORMAT TTD PERMANEN) ---
+# --- 3. FUNGSI GENERATE PDF ---
 def generate_pdf(df, rentang_tgl, peg_data, tek_data):
     pdf = FPDF(orientation='L', unit='mm', format='A4')
     pdf.add_page()
@@ -44,7 +42,6 @@ def generate_pdf(df, rentang_tgl, peg_data, tek_data):
     pdf.cell(0, 7, f"Periode: {rentang_tgl}", ln=True, align="C")
     pdf.ln(10)
     
-    # Header Tabel
     pdf.set_font("Helvetica", "B", 9)
     pdf.set_fill_color(0, 173, 239)
     pdf.set_text_color(255, 255, 255)
@@ -53,7 +50,6 @@ def generate_pdf(df, rentang_tgl, peg_data, tek_data):
     for i in range(len(cols)): pdf.cell(w[i], 10, cols[i], 1, 0, "C", True)
     pdf.ln()
 
-    # Isi Tabel
     pdf.set_font("Helvetica", "", 8); pdf.set_text_color(0, 0, 0)
     for _, row in df.iterrows():
         sow_data = row.get('checklist_data', {})
@@ -79,7 +75,6 @@ def generate_pdf(df, rentang_tgl, peg_data, tek_data):
         pdf.set_y(start_y + max_h)
         if pdf.get_y() > 170: pdf.add_page()
 
-    # --- TANDA TANGAN ---
     pdf.ln(15); cur_y = pdf.get_y(); pdf.set_font("Helvetica", "", 10)
     pdf.set_xy(10, cur_y); pdf.cell(138, 5, "Diketahui,", 0, 0, "C")
     pdf.set_xy(148, cur_y); pdf.cell(138, 5, "Dibuat oleh,", 0, 1, "C")
@@ -122,17 +117,16 @@ opt_asset = {f"{a['kode_qr']} - {a['nama_aset']}": a for a in assets_list}
 list_tek = [s['nama'] for s in staff_list if s['kategori'] == 'TEKNISI']
 list_peg = [s['nama'] for s in staff_list if s['kategori'] == 'PEGAWAI']
 
-# --- 5. TAMPILAN HEADER (Sesuai Foto) ---
 st.markdown('<div class="main-header"><h1>⚡ SIMANTAP BI BALIKPAPAN</h1></div>', unsafe_allow_html=True)
 
-# --- 6. ROUTING HALAMAN ---
+# --- 5. ROUTING HALAMAN ---
 if st.session_state.hal == 'Menu':
-    c1, mid, c2 = st.columns([1, 0.2, 1]) # Spacer di tengah agar mirip foto
+    c1, mid, c2 = st.columns([1, 0.2, 1])
     with c1:
         if st.button("☀️ CHECKLIST HARIAN"): pindah('Harian'); st.rerun()
         if st.button("📅 CHECKLIST MINGGUAN"): pindah('Mingguan'); st.rerun()
         if st.button("🏆 CHECKLIST BULANAN"): pindah('Bulanan'); st.rerun()
-        if st.button("📊 STATISTIK ASET"): pindah('Statistik'); st.rerun() # Fitur Baru
+        if st.button("📊 STATISTIK ASET"): pindah('Statistik'); st.rerun()
     with c2:
         if st.button("⚠️ LAPOR GANGGUAN"): pindah('Gangguan'); st.rerun()
         if st.button("🔄 UPDATE PERBAIKAN"): pindah('Update'); st.rerun()
@@ -153,6 +147,35 @@ elif st.session_state.hal == 'Statistik':
             st.plotly_chart(fig2, use_container_width=True)
     else: st.info("Belum ada data.")
 
+elif st.session_state.hal == 'Gangguan':
+    if st.button("⬅️ KEMBALI"): pindah('Menu'); st.rerun()
+    st.subheader("⚠️ Lapor Gangguan / Kerusakan")
+    sel_a = st.selectbox("Pilih Aset Bermasalah", list(opt_asset.keys()))
+    with st.form("f_gangguan", clear_on_submit=True):
+        t = st.selectbox("Pelapor (Teknisi)", list_tek)
+        masalah = st.text_area("Deskripsi Kerusakan")
+        if st.form_submit_button("KIRIM LAPORAN"):
+            if masalah:
+                supabase.table("gangguan_logs").insert({
+                    "asset_id": opt_asset[sel_a]['id'], "pelapor": t, 
+                    "masalah": masalah, "status": "Open"
+                }).execute()
+                st.error("Laporan Gangguan Berhasil Dikirim!"); st.bell()
+            else: st.warning("Mohon isi deskripsi masalah.")
+
+elif st.session_state.hal == 'Update':
+    if st.button("⬅️ KEMBALI"): pindah('Menu'); st.rerun()
+    st.subheader("🔄 Update Status Perbaikan")
+    data_g = supabase.table("gangguan_logs").select("*, assets(nama_aset)").eq("status", "Open").execute().data
+    if data_g:
+        for g in data_g:
+            with st.expander(f"🔴 {g['assets']['nama_aset']} - {g['created_at'][:10]}"):
+                st.write(f"**Masalah:** {g['masalah']}")
+                if st.button(f"Selesai Diperbaiki", key=g['id']):
+                    supabase.table("gangguan_logs").update({"status": "Closed"}).eq("id", g['id']).execute()
+                    st.success("Status Diperbarui!"); st.rerun()
+    else: st.info("Tidak ada gangguan aktif saat ini.")
+
 elif st.session_state.hal == 'Export':
     if st.button("⬅️ KEMBALI"): pindah('Menu'); st.rerun()
     st.subheader("📊 Export PDF")
@@ -170,7 +193,6 @@ elif st.session_state.hal == 'Export':
             if st.download_button("📥 DOWNLOAD PDF", generate_pdf(df_f, f"{tgl_r[0]} s/d {tgl_r[1]}", staff_map[p_sel], staff_map[t_sel]), "Lap.pdf"):
                 st.success("Download Berhasil")
 
-# --- Modul Input (Harian/Gangguan dll) ---
 elif st.session_state.hal in ['Harian', 'Mingguan', 'Bulanan']:
     if st.button("⬅️ KEMBALI"): pindah('Menu'); st.rerun()
     st.subheader(f"Form {st.session_state.hal}")
