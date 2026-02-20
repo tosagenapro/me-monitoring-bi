@@ -85,11 +85,13 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-# --- 4. HEADER ---
+# --- 4. HEADER (KEMBALI KE IDENTITAS ASLI) ---
 st.markdown("""
     <div class="main-header">
-        <h1>⚡ SIMANTAP ME | KPwBI BPP</h1>
-        <p style="color:#94a3b8; font-size:0.8rem; margin:0;">Command Center & Monitoring Dashboard</p>
+        <h1>⚡ SIMANTAP ME | KPwBI BALIKPAPAN</h1>
+        <p style="color:#94a3b8; font-size:1rem; margin-top:5px; letter-spacing: 0.85px;">
+            Sistem Informasi Monitoring Aset & Pemeliharaan Terpadu Fasilitas Mechanical Electrical
+        </p>
     </div>
     """, unsafe_allow_html=True)
 
