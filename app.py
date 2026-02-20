@@ -8,7 +8,6 @@ import plotly.express as px
 import time
 
 # --- 1. CONFIG & KONEKSI ---
-# Update: Menambahkan page_icon agar tidak muncul logo merah Streamlit di tab browser
 st.set_page_config(
     page_title="SIMANTAP ME BI BPP", 
     page_icon="⚡", 
@@ -49,122 +48,52 @@ SOW_MASTER = {
     }
 }
 
-# --- 3. CSS CUSTOM (ULTIMATE CLEAN & GORIDE VIBES) ---
+# --- 3. CSS CUSTOM (COMMAND CENTER VIBES) ---
 st.markdown("""
     <style>
-    /* Menghilangkan Jejak Streamlit Secara Total */
     #MainMenu {visibility: hidden;}
     footer {visibility: hidden;}
     header {visibility: hidden;}
-    
-    /* Update: Paksa buang watermark 'Hosted with Streamlit' di pojok kanan */
     .viewerBadge_container__1QSob {display: none !important;}
-    [data-testid="stDecoration"] {display: none;}
-    div[data-testid="stStatusWidget"] {visibility: hidden;}
-
+    
     .stApp { background: #0f172a; }
     
-    /* Header Utama */
+    /* Dashboard Cards */
+    .stat-card {
+        background: #1e293b; border-radius: 12px; padding: 15px;
+        border-bottom: 3px solid #38bdf8; text-align: center;
+    }
+    
+    /* Header */
     .main-header { 
         text-align: center; padding: 20px; background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%); 
-        border-bottom: 3px solid #38bdf8; border-radius: 0 0 20px 20px; margin-bottom: 30px; 
+        border-bottom: 3px solid #38bdf8; border-radius: 0 0 20px 20px; margin-bottom: 20px; 
     }
-    .main-header h1 { color: #38bdf8; margin: 0; font-size: 1.8rem; font-weight: 800; text-shadow: 0 0 10px rgba(56, 189, 248, 0.3); }
-    .main-header p { color: #94a3b8; margin: 5px 0 0 0; font-size: 0.85rem; letter-spacing: 1px; }
+    .main-header h1 { color: #38bdf8; margin: 0; font-size: 1.6rem; font-weight: 800; }
     
-    /* Tombol Menu */
+    /* Buttons */
     div.stButton > button { 
-        width: 100%; height: 80px !important; background: #1e293b !important; 
-        border: 1px solid #334155 !important; border-radius: 15px !important; 
-        color: #f8fafc !important; font-weight: bold !important; font-size: 1rem !important;
-        transition: all 0.3s ease;
+        width: 100%; height: 60px !important; background: #1e293b !important; 
+        border: 1px solid #334155 !important; border-radius: 12px !important; 
+        color: #f8fafc !important; font-weight: bold !important;
+        transition: all 0.3s ease; margin-bottom: 10px;
     }
-    div.stButton > button:hover { 
-        border-color: #38bdf8 !important; color: #38bdf8 !important;
-        transform: translateY(-3px); box-shadow: 0 10px 20px rgba(0,0,0,0.4);
-    }
+    div.stButton > button:hover { border-color: #38bdf8 !important; transform: translateY(-2px); }
     
-    /* Input Form UX */
-    .stSelectbox, .stTextInput, .stTextArea {
-        background-color: #1e293b !important; border-radius: 10px !important;
-    }
-    div[data-testid="stForm"] {
-        background: #1e293b; border-radius: 20px; padding: 20px; border: 1px solid #334155;
-    }
-    label { color: #38bdf8 !important; font-size: 0.9rem !important; margin-bottom: 5px !important; }
-    
-    /* Padding untuk Mobile */
-    .block-container { padding-top: 1rem !important; padding-bottom: 1rem !important; }
+    /* Form & Input */
+    div[data-testid="stForm"] { background: #1e293b; border-radius: 15px; border: 1px solid #334155; }
     </style>
     """, unsafe_allow_html=True)
 
-# --- 4. HEADER UTAMA ---
+# --- 4. HEADER ---
 st.markdown("""
     <div class="main-header">
-        <h1>⚡ SIMANTAP ME | KPwBI BALIKPAPAN</h1>
-        <p>Sistem Informasi Monitoring Aset & Pemeliharaan Terpadu Fasilitas Mechanical Electrical</p>
+        <h1>⚡ SIMANTAP ME | KPwBI BPP</h1>
+        <p style="color:#94a3b8; font-size:0.8rem; margin:0;">Command Center & Monitoring Dashboard</p>
     </div>
     """, unsafe_allow_html=True)
 
-# --- 5. FUNGSI PENDUKUNG ---
-def upload_foto(file):
-    if file is not None:
-        filename = f"{uuid.uuid4()}.jpg"
-        filepath = f"public/{filename}" 
-        try:
-            supabase.storage.from_("foto_maintenance").upload(filepath, file.getvalue(), {"content-type": "image/jpeg"})
-            return f"{URL}/storage/v1/object/public/foto_maintenance/{filepath}"
-        except: return None
-    return None
-
-def generate_pdf(df, rentang_tgl, peg_data, tek_data, judul="LAPORAN"):
-    try:
-        pdf = FPDF(orientation='L', unit='mm', format='A4')
-        pdf.add_page()
-        pdf.set_font("Helvetica", "B", 16)
-        pdf.cell(0, 10, f"{judul} ME - BI BALIKPAPAN", ln=True, align="C")
-        pdf.set_font("Helvetica", "I", 10)
-        pdf.cell(0, 7, f"Periode: {rentang_tgl}", ln=True, align="C")
-        pdf.ln(10)
-        
-        pdf.set_font("Helvetica", "B", 9); pdf.set_fill_color(0, 173, 239); pdf.set_text_color(255, 255, 255)
-        w = [55, 25, 35, 35, 127]
-        cols = ["Aset", "Kategori", "Teknisi", "Status", "Keterangan"]
-        for i in range(len(cols)): pdf.cell(w[i], 10, cols[i], 1, 0, "C", True)
-        pdf.ln()
-
-        pdf.set_font("Helvetica", "", 8); pdf.set_text_color(0, 0, 0)
-        for _, row in df.iterrows():
-            aset, kat, tek = str(row.get('Nama Aset', '-')), str(row.get('periode', row.get('urgensi', '-'))), str(row.get('teknisi', '-'))
-            stts, ket = str(row.get('kondisi', row.get('status', '-'))), str(row.get('keterangan', row.get('tindakan_perbaikan', row.get('masalah', '-'))))
-            
-            s_y = pdf.get_y()
-            pdf.multi_cell(w[0], 10, aset, 1, 'L')
-            y_a = pdf.get_y()
-            pdf.set_xy(10+w[0]+w[1]+w[2]+w[3], s_y)
-            pdf.multi_cell(w[4], 10, ket, 1, 'L')
-            y_d = pdf.get_y()
-            h = max(y_a, y_d) - s_y
-            pdf.rect(10, s_y, w[0], h); pdf.rect(10+w[0], s_y, w[1], h); pdf.rect(10+w[0]+w[1], s_y, w[2], h); pdf.rect(10+w[0]+w[1]+w[2], s_y, w[3], h)
-            pdf.set_xy(10+w[0], s_y); pdf.cell(w[1], h, kat, 0, 0, "C"); pdf.cell(w[2], h, tek, 0, 0, "C"); pdf.cell(w[3], h, stts, 0, 0, "C")
-            pdf.set_y(s_y + h)
-            if pdf.get_y() > 170: pdf.add_page()
-        
-        pdf.ln(15); pdf.set_font("Helvetica", "", 10)
-        pdf.cell(138, 5, "Diketahui,", 0, 0, "C"); pdf.cell(138, 5, "Dibuat oleh,", 0, 1, "C")
-        pdf.cell(138, 5, str(peg_data.get('posisi', '')), 0, 0, "C"); pdf.cell(138, 5, "CV. INDO MEGA JAYA", 0, 1, "C")
-        pdf.ln(18)
-        pdf.set_font("Helvetica", "BU", 10)
-        pdf.cell(138, 5, str(peg_data.get('nama', '')), 0, 0, "C"); pdf.cell(138, 5, str(tek_data.get('nama', '')), 0, 1, "C")
-        pdf.set_font("Helvetica", "", 9)
-        pdf.cell(138, 5, str(peg_data.get('jabatan_pdf', '')), 0, 0, "C"); pdf.cell(138, 5, "Teknisi ME", 0, 1, "C")
-        return pdf.output(dest='S').encode('latin-1')
-    except: return None
-
-# --- 6. SETUP DATA & NAVIGASI ---
-if 'hal' not in st.session_state: st.session_state.hal = 'Menu'
-def pindah(n): st.session_state.hal = n
-
+# --- 5. FUNGSI ---
 @st.cache_data(ttl=30)
 def load_data():
     a = supabase.table("assets").select("*").order("nama_aset").execute().data
@@ -177,118 +106,188 @@ opt_asset = {f"{a['kode_qr']} - {a['nama_aset']}": a for a in assets_list}
 list_tek = [s['nama'] for s in staff_list if s['kategori'] == 'TEKNISI']
 list_peg = [s['nama'] for s in staff_list if s['kategori'] == 'PEGAWAI']
 
-# --- 7. ROUTING HALAMAN ---
-if st.session_state.hal == 'Menu':
-    left, center, right = st.columns([0.4, 2, 0.4])
-    with center:
-        col1, col2 = st.columns(2)
-        with col1:
-            if st.button("☀️ CHECKLIST HARIAN"): pindah('Harian'); st.rerun()
-            if st.button("📅 CHECKLIST MINGGUAN"): pindah('Mingguan'); st.rerun()
-            if st.button("🏆 CHECKLIST BULANAN"): pindah('Bulanan'); st.rerun()
-            if st.button("📑 EXPORT PDF"): pindah('Export'); st.rerun()
-        with col2:
-            if st.button("⚠️ LAPOR GANGGUAN"): pindah('Gangguan'); st.rerun()
-            if st.button("🔄 UPDATE PERBAIKAN"): pindah('Update'); st.rerun()
-            if st.button("📊 STATISTIK"): pindah('Statistik'); st.rerun()
-            if st.button("ℹ️ INFO SISTEM"): st.toast("SIMANTAP ME v2.3 Ultimate Clean", icon="⚡")
-    st.markdown("---")
-    st.caption("<center>© 2026 KPwBI Balikpapan - Unit MI</center>", unsafe_allow_html=True)
+def upload_foto(file):
+    if file:
+        fname = f"public/{uuid.uuid4()}.jpg"
+        try:
+            supabase.storage.from_("foto_maintenance").upload(fname, file.getvalue(), {"content-type":"image/jpeg"})
+            return f"{URL}/storage/v1/object/public/foto_maintenance/{fname}"
+        except: return None
+    return None
 
+def generate_pdf(df, rentang, peg, tek, judul):
+    try:
+        pdf = FPDF('L', 'mm', 'A4'); pdf.add_page(); pdf.set_font("Helvetica", "B", 16)
+        pdf.cell(0, 10, f"{judul} - BI BALIKPAPAN", ln=True, align="C")
+        pdf.set_font("Helvetica", "I", 10); pdf.cell(0, 7, f"Periode: {rentang}", ln=True, align="C"); pdf.ln(10)
+        # Header Tabel
+        pdf.set_font("Helvetica", "B", 9); pdf.set_fill_color(0, 173, 239); pdf.set_text_color(255, 255, 255)
+        w = [55, 25, 35, 35, 127]
+        cols = ["Aset", "Kategori", "Teknisi", "Status", "Keterangan"]
+        for i in range(len(cols)): pdf.cell(w[i], 10, cols[i], 1, 0, "C", True)
+        pdf.ln(); pdf.set_font("Helvetica", "", 8); pdf.set_text_color(0, 0, 0)
+        # Data
+        for _, row in df.iterrows():
+            pdf.cell(w[0], 10, str(row.get('Nama Aset','-')), 1); pdf.cell(w[1], 10, str(row.get('periode','-')), 1)
+            pdf.cell(w[2], 10, str(row.get('teknisi','-')), 1); pdf.cell(w[3], 10, str(row.get('kondisi','-')), 1)
+            pdf.cell(w[4], 10, str(row.get('keterangan','-'))[:80], 1); pdf.ln()
+        # Signature
+        pdf.ln(10); pdf.set_font("Helvetica", "", 10)
+        pdf.cell(138, 5, "Diketahui,", 0, 0, "C"); pdf.cell(138, 5, "Dibuat oleh,", 0, 1, "C")
+        pdf.cell(138, 5, str(peg.get('posisi', '')), 0, 0, "C"); pdf.cell(138, 5, "CV. INDO MEGA JAYA", 0, 1, "C"); pdf.ln(15)
+        pdf.set_font("Helvetica", "BU", 10)
+        pdf.cell(138, 5, str(peg.get('nama', '')), 0, 0, "C"); pdf.cell(138, 5, str(tek.get('nama', '')), 0, 1, "C")
+        pdf.set_font("Helvetica", "", 9)
+        pdf.cell(138, 5, str(peg.get('jabatan_pdf', '')), 0, 0, "C"); pdf.cell(138, 5, "Teknisi ME", 0, 1, "C")
+        return pdf.output(dest='S').encode('latin-1')
+    except: return None
+
+# --- 6. LOGIKA HALAMAN ---
+if 'hal' not in st.session_state: st.session_state.hal = 'Menu'
+def pindah(n): st.session_state.hal = n
+
+# --- MENU UTAMA ---
+if st.session_state.hal == 'Menu':
+    # 1. Papan Info Digital
+    g_open = supabase.table("gangguan_logs").select("id").eq("status", "Open").execute().data
+    m_today = supabase.table("maintenance_logs").select("id").filter("created_at", "gte", datetime.date.today().isoformat()).execute().data
+    
+    c1, c2, c3 = st.columns(3)
+    with c1: st.markdown(f'<div class="stat-card"><small>GANGGUAN</small><br><b style="color:#ef4444; font-size:1.5rem;">{len(g_open)}</b></div>', unsafe_allow_html=True)
+    with c2: st.markdown(f'<div class="stat-card"><small>CEK HARI INI</small><br><b style="color:#22c55e; font-size:1.5rem;">{len(m_today)}</b></div>', unsafe_allow_html=True)
+    with c3: st.markdown(f'<div class="stat-card"><small>SISTEM</small><br><b style="color:#38bdf8; font-size:1.5rem;">OK</b></div>', unsafe_allow_html=True)
+    
+    st.write("")
+    
+    # 2. Timeline Aktivitas (Terbaru)
+    with st.expander("🕒 AKTIVITAS TERAKHIR TIM"):
+        recent = supabase.table("maintenance_logs").select("teknisi, periode, created_at, assets(nama_aset)").order("created_at", desc=True).limit(3).execute().data
+        if recent:
+            for r in recent:
+                tgl = pd.to_datetime(r['created_at']).strftime('%H:%M')
+                st.caption(f"📌 **{tgl}** - {r['teknisi']} cek {r['assets']['nama_aset']} ({r['periode']})")
+        else: st.caption("Belum ada aktivitas hari ini.")
+
+    # 3. Tombol Navigasi
+    st.write("---")
+    col_l, col_r = st.columns(2)
+    with col_l:
+        if st.button("☀️ HARIAN"): pindah('Harian'); st.rerun()
+        if st.button("📅 MINGGUAN"): pindah('Mingguan'); st.rerun()
+        if st.button("🏆 BULANAN"): pindah('Bulanan'); st.rerun()
+    with col_r:
+        if st.button("⚠️ GANGGUAN"): pindah('Gangguan'); st.rerun()
+        if st.button("🔄 UPDATE"): pindah('Update'); st.rerun()
+        if st.button("📑 LAPORAN"): pindah('Export'); st.rerun()
+    
+    if st.button("📊 STATISTIK KINERJA"): pindah('Statistik'); st.rerun()
+
+# --- HALAMAN STATISTIK ---
 elif st.session_state.hal == 'Statistik':
     if st.button("⬅️ KEMBALI"): pindah('Menu'); st.rerun()
+    st.subheader("📊 Analisis Data Pemeliharaan")
     df_g = pd.DataFrame(supabase.table("gangguan_logs").select("*").execute().data)
     if not df_g.empty:
-        c1, c2, c3 = st.columns(3)
-        c1.metric("Total Gangguan", len(df_g))
-        c2.metric("Pending", len(df_g[df_g['status'] == 'Open']), delta_color="inverse")
-        c3.metric("Clear", len(df_g[df_g['status'] == 'Closed']))
-        st.plotly_chart(px.pie(df_g, names='status', title="Kondisi Fasilitas ME", hole=0.4, color_discrete_sequence=['#ef4444', '#22c55e']))
-    else: st.info("Belum ada data.")
+        st.plotly_chart(px.pie(df_g, names='status', title="Status Gangguan Fasilitas", hole=0.4, color_discrete_map={'Open':'#ef4444','Closed':'#22c55e'}))
+        st.write("---")
+        st.write("**Top 5 Aset Bermasalah**")
+        df_g_counts = df_g.merge(pd.DataFrame(assets_list), left_on='asset_id', right_on='id')
+        st.bar_chart(df_g_counts['nama_aset'].value_counts().head(5))
+    else: st.info("Data belum cukup untuk statistik.")
 
-elif st.session_state.hal == 'Gangguan':
-    if st.button("⬅️ KEMBALI"): pindah('Menu'); st.rerun()
-    with st.form("f_g"):
-        sel_a = st.selectbox("Pilih Aset", list(opt_asset.keys()))
-        t = st.selectbox("Pelapor", list_tek); urg = st.selectbox("Urgensi", ["Sedang", "Mendesak", "Darurat"])
-        mas = st.text_area("Deskripsi Kerusakan"); foto = st.camera_input("Ambil Foto")
-        if st.form_submit_button("KIRIM LAPORAN"):
-            u = upload_foto(foto)
-            supabase.table("gangguan_logs").insert({"asset_id": opt_asset[sel_a]['id'], "teknisi": t, "masalah": mas, "urgensi": urg, "status": "Open", "foto_kerusakan_url": u}).execute()
-            st.success("✅ Laporan Berhasil Dikirim!"); st.toast("Masuk database!", icon="⚠️")
-            time.sleep(1.5); st.rerun()
-
-elif st.session_state.hal == 'Update':
-    if st.button("⬅️ KEMBALI"): pindah('Menu'); st.rerun()
-    data_g = supabase.table("gangguan_logs").select("*, assets(nama_aset)").eq("status", "Open").execute().data
-    if data_g:
-        for g in data_g:
-            with st.expander(f"🔴 {g['assets']['nama_aset']}"):
-                t_p = st.selectbox("Teknisi Eksekutor", list_tek, key=f"tk_{g['id']}")
-                tindakan = st.text_area("Tindakan", key=f"tnd_{g['id']}")
-                foto_a = st.camera_input("Foto Sesudah", key=f"aft_{g['id']}")
-                if st.button("Update Selesai", key=f"btn_{g['id']}"):
-                    u_a = upload_foto(foto_a)
-                    supabase.table("gangguan_logs").update({"status": "Closed", "tindakan_perbaikan": tindakan, "teknisi_perbaikan": t_p, "tgl_perbaikan": datetime.datetime.now().isoformat(), "foto_setelah_perbaikan_url": u_a}).eq("id", g['id']).execute()
-                    st.success("✅ Selesai!"); st.balloons(); time.sleep(2); st.rerun()
-    else: st.info("Semua perangkat aman (No Pending Task).")
-
+# --- HALAMAN CHECKLIST (HARIAN/MINGGUAN/BULANAN) ---
 elif st.session_state.hal in ['Harian', 'Mingguan', 'Bulanan']:
     if st.button("⬅️ KEMBALI"): pindah('Menu'); st.rerun()
-    st.subheader(f"📋 Smart Checklist {st.session_state.hal}")
-    sel_a_l = st.selectbox("Pilih Aset", list(opt_asset.keys()))
-    nama_a = opt_asset[sel_a_l]['nama_aset'].upper()
-    k_key = "UMUM"
-    if "AC" in nama_a: k_key = "AC"
-    elif "GENSET" in nama_a: k_key = "GENSET"
-    elif "UPS" in nama_a: k_key = "UPS"
-    elif "PANEL" in nama_a: k_key = "PANEL"
+    st.subheader(f"📋 Checklist {st.session_state.hal}")
+    
+    # Smart Search Filter
+    search = st.text_input("🔍 Cari Nama Aset...", placeholder="Ketik misal: AC, Genset, atau AHU")
+    filtered_assets = {k:v for k,v in opt_asset.items() if search.upper() in k.upper()}
+    
+    sel_a = st.selectbox("Pilih Aset", list(filtered_assets.keys()))
+    asset_data = opt_asset[sel_a]
+    nama_up = asset_data['nama_aset'].upper()
+    
+    k_key = "AC" if "AC" in nama_up else "GENSET" if "GENSET" in nama_up else "UPS" if "UPS" in nama_up else "PANEL" if "PANEL" in nama_up else "UMUM"
     
     with st.form("f_chk"):
-        t = st.selectbox("Teknisi", list_tek); st.write(f"--- Parameter {k_key} ---")
-        resp = []
+        tek = st.selectbox("Teknisi", list_tek)
+        res_list = []
         for i, task in enumerate(SOW_MASTER[k_key][st.session_state.hal]):
-            check_k = ["%", "VOLT", "AMPERE", "PSI", "°C", "HZ", "MENIT", "PERSENTASE", "SUHU"]
-            if any(k in task.upper() for k in check_k):
-                val = st.number_input(f"{task}", step=0.1, key=f"n_{i}"); resp.append(f"{task}: {val}")
+            if any(x in task.upper() for x in ["%", "VOLT", "AMPERE", "PSI", "°C", "HZ", "MENIT"]):
+                val = st.number_input(task, step=0.1, key=f"v_{i}")
+                res_list.append(f"{task}: {val}")
             else:
-                r = st.radio(f"{task}", ["Normal", "Tidak Normal", "N/A"], horizontal=True, key=f"r_{i}"); resp.append(f"{task}: {r}")
-        kon = st.radio("Kondisi Keseluruhan", ["Sangat Baik", "Baik", "Perlu Perbaikan", "Rusak"], index=1); cat = st.text_area("Catatan")
-        if st.form_submit_button("💾 SIMPAN"):
-            k_f = " | ".join(resp) + (f" | Catatan: {cat}" if cat else "")
-            supabase.table("maintenance_logs").insert({"asset_id": opt_asset[sel_a_l]['id'], "teknisi": t, "periode": st.session_state.hal, "kondisi": kon, "keterangan": k_f}).execute()
-            st.success(f"✅ Data {nama_a} Disimpan!"); st.toast("Checklist Terkirim!", icon="💾")
-            if st.session_state.hal == 'Bulanan': st.balloons()
-            time.sleep(1.5); st.rerun()
+                r = st.radio(task, ["Normal", "Abnormal", "N/A"], horizontal=True, key=f"r_{i}")
+                res_list.append(f"{task}: {r}")
+        
+        kondisi = st.select_slider("Kondisi Akhir", options=["Rusak", "Perlu Perbaikan", "Baik", "Sangat Baik"], value="Baik")
+        catatan = st.text_area("Catatan Tambahan")
+        
+        if st.form_submit_button("💾 SIMPAN DATA"):
+            ket_final = " | ".join(res_list) + (f" | Catatan: {catatan}" if catatan else "")
+            supabase.table("maintenance_logs").insert({
+                "asset_id": asset_data['id'], "teknisi": tek, "periode": st.session_state.hal, 
+                "kondisi": kondisi, "keterangan": ket_final
+            }).execute()
+            st.success("Data Berhasil Disimpan!"); time.sleep(1); st.rerun()
 
+# --- HALAMAN GANGGUAN ---
+elif st.session_state.hal == 'Gangguan':
+    if st.button("⬅️ KEMBALI"): pindah('Menu'); st.rerun()
+    with st.form("f_gangguan"):
+        aset = st.selectbox("Aset Bermasalah", list(opt_asset.keys()))
+        pelapor = st.selectbox("Teknisi Pelapor", list_tek)
+        urgensi = st.select_slider("Tingkat Urgensi", options=["Rendah", "Sedang", "Tinggi", "Darurat"])
+        masalah = st.text_area("Deskripsi Kerusakan")
+        foto = st.camera_input("Foto Bukti")
+        if st.form_submit_button("🚨 KIRIM LAPORAN"):
+            u = upload_foto(foto)
+            supabase.table("gangguan_logs").insert({
+                "asset_id": opt_asset[aset]['id'], "teknisi": pelapor, 
+                "masalah": masalah, "urgensi": urgensi, "status": "Open", "foto_kerusakan_url": u
+            }).execute()
+            st.warning("Laporan Gangguan Terkirim!"); time.sleep(1); st.rerun()
+
+# --- HALAMAN UPDATE PERBAIKAN ---
+elif st.session_state.hal == 'Update':
+    if st.button("⬅️ KEMBALI"): pindah('Menu'); st.rerun()
+    st.subheader("🔄 Update Status Perbaikan")
+    logs = supabase.table("gangguan_logs").select("*, assets(nama_aset)").eq("status", "Open").execute().data
+    if logs:
+        for l in logs:
+            with st.expander(f"⚠️ {l['assets']['nama_aset']} - {l['urgensi']}"):
+                st.write(f"Masalah: {l['masalah']}")
+                tek_ex = st.selectbox("Teknisi Eksekutor", list_tek, key=f"ex_{l['id']}")
+                solusi = st.text_area("Tindakan Perbaikan", key=f"sol_{l['id']}")
+                foto_fin = st.camera_input("Foto Hasil", key=f"fin_{l['id']}")
+                if st.button("Tandai Selesai", key=f"btn_{l['id']}"):
+                    u_f = upload_foto(foto_fin)
+                    supabase.table("gangguan_logs").update({
+                        "status": "Closed", "tindakan_perbaikan": solusi, "teknisi_perbaikan": tek_ex,
+                        "tgl_perbaikan": datetime.datetime.now().isoformat(), "foto_setelah_perbaikan_url": u_f
+                    }).eq("id", l['id']).execute()
+                    st.success("Berhasil diupdate!"); time.sleep(1); st.rerun()
+    else: st.info("Tidak ada pending perbaikan.")
+
+# --- HALAMAN EXPORT PDF ---
 elif st.session_state.hal == 'Export':
     if st.button("⬅️ KEMBALI"): pindah('Menu'); st.rerun()
-    t1, t2 = st.tabs(["📑 Log Checklist ME", "⚠️ Log Gangguan ME"])
-    with t1:
-        res = supabase.table("maintenance_logs").select("*, assets(nama_aset)").order("created_at", desc=True).execute().data
-        if res:
-            df = pd.DataFrame(res); df['Nama Aset'] = df['assets'].apply(lambda x: x['nama_aset'] if x else "N/A")
-            c1, c2 = st.columns(2)
-            with c1: dr = st.date_input("Rentang Tanggal", [datetime.date.today(), datetime.date.today()], key="d1")
-            with c2: filter_p = st.selectbox("Filter Periode", ["Semua", "Harian", "Mingguan", "Bulanan"], key="f_p")
-            if len(dr) == 2:
-                dff = df[(pd.to_datetime(df['created_at']).dt.date >= dr[0]) & (pd.to_datetime(df['created_at']).dt.date <= dr[1])]
-                if filter_p != "Semua": dff = dff[dff['periode'] == filter_p]
-                st.dataframe(dff[['Nama Aset', 'periode', 'teknisi', 'kondisi', 'created_at']], use_container_width=True)
-                if not dff.empty:
-                    p, t = st.selectbox("Diketahui (BI)", list_peg, key="p1"), st.selectbox("Dibuat (IMJ)", list_tek, key="t1")
-                    if st.button("CETAK PDF CHECKLIST"):
-                        pb = generate_pdf(dff, f"{dr[0]} sd {dr[1]} ({filter_p})", staff_map[p], staff_map[t], f"LAPORAN CHECKLIST {filter_p.upper()}")
-                        if pb: st.download_button(f"Download PDF {filter_p}", pb, f"Checklist_ME_{filter_p}_{dr[0]}.pdf")
-    with t2:
-        res2 = supabase.table("gangguan_logs").select("*, assets(nama_aset)").order("created_at", desc=True).execute().data
-        if res2:
-            df2 = pd.DataFrame(res2); df2['Nama Aset'] = df2['assets'].apply(lambda x: x['nama_aset'] if x else "N/A")
-            dr2 = st.date_input("Filter Tanggal", [datetime.date.today(), datetime.date.today()], key="d2")
-            if len(dr2) == 2:
-                df2f = df2[(pd.to_datetime(df2['created_at']).dt.date >= dr2[0]) & (pd.to_datetime(df2['created_at']).dt.date <= dr2[1])]
-                st.dataframe(df2f[['Nama Aset', 'urgensi', 'teknisi', 'status', 'masalah']], use_container_width=True)
-                p2, t2 = st.selectbox("Diketahui (BI)", list_peg, key="p2"), st.selectbox("Dibuat (IMJ)", list_tek, key="t2")
-                if st.button("CETAK PDF KERUSAKAN"):
-                    pb2 = generate_pdf(df2f, f"{dr2[0]} sd {dr2[1]}", staff_map[p2], staff_map[t2], "LAPORAN KERUSAKAN FASILITAS")
-                    if pb2: st.download_button("Download PDF Gangguan", pb2, f"Laporan_Kerusakan_ME_{dr2[0]}.pdf")
+    st.subheader("📑 Penarikan Laporan PDF")
+    tab1, tab2 = st.tabs(["Log Pemeliharaan", "Log Gangguan"])
+    
+    with tab1:
+        dr = st.date_input("Pilih Rentang Waktu", [datetime.date.today(), datetime.date.today()])
+        per = st.selectbox("Filter Periode", ["Semua", "Harian", "Mingguan", "Bulanan"])
+        if len(dr) == 2:
+            raw = supabase.table("maintenance_logs").select("*, assets(nama_aset)").order("created_at", desc=True).execute().data
+            if raw:
+                df = pd.DataFrame(raw); df['Nama Aset'] = df['assets'].apply(lambda x: x['nama_aset'])
+                df_f = df[(pd.to_datetime(df['created_at']).dt.date >= dr[0]) & (pd.to_datetime(df['created_at']).dt.date <= dr[1])]
+                if per != "Semua": df_f = df_f[df_f['periode'] == per]
+                st.dataframe(df_f[['Nama Aset', 'periode', 'teknisi', 'kondisi', 'created_at']], use_container_width=True)
+                if not df_f.empty:
+                    p, t = st.selectbox("Diketahui (BI)", list_peg), st.selectbox("Dibuat (IMJ)", list_tek)
+                    if st.button("PROSES PDF"):
+                        b = generate_pdf(df_f, f"{dr[0]} s/d {dr[1]}", staff_map[p], staff_map[t], f"LAPORAN {per.upper()}")
+                        if b: st.download_button("Download PDF", b, f"Lap_{per}_{dr[0]}.pdf")
