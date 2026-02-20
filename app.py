@@ -8,12 +8,19 @@ import plotly.express as px
 import time
 
 # --- 1. CONFIG & KONEKSI ---
-st.set_page_config(page_title="SIMANTAP ME BI BPP", layout="wide", initial_sidebar_state="collapsed")
+# Update: Menambahkan page_icon agar tidak muncul logo merah Streamlit di tab browser
+st.set_page_config(
+    page_title="SIMANTAP ME BI BPP", 
+    page_icon="⚡", 
+    layout="wide", 
+    initial_sidebar_state="collapsed"
+)
+
 URL = st.secrets["SUPABASE_URL"]
 KEY = st.secrets["SUPABASE_KEY"]
 supabase: Client = create_client(URL, KEY)
 
-# --- 2. MASTER SOW DINAMIS (PINTAR) ---
+# --- 2. MASTER SOW DINAMIS ---
 SOW_MASTER = {
     "AC": {
         "Harian": ["Suhu Ruangan Server (°C)", "Cek suara abnormal outdoor", "Cek kebocoran air indoor"],
@@ -42,16 +49,22 @@ SOW_MASTER = {
     }
 }
 
-# --- 3. CSS CUSTOM (CLEAN & TACTICAL) ---
+# --- 3. CSS CUSTOM (ULTIMATE CLEAN & GORIDE VIBES) ---
 st.markdown("""
     <style>
+    /* Menghilangkan Jejak Streamlit Secara Total */
     #MainMenu {visibility: hidden;}
     footer {visibility: hidden;}
     header {visibility: hidden;}
     
+    /* Update: Paksa buang watermark 'Hosted with Streamlit' di pojok kanan */
+    .viewerBadge_container__1QSob {display: none !important;}
+    [data-testid="stDecoration"] {display: none;}
+    div[data-testid="stStatusWidget"] {visibility: hidden;}
+
     .stApp { background: #0f172a; }
     
-    /* Header Utama lebih Slim & Modern */
+    /* Header Utama */
     .main-header { 
         text-align: center; padding: 20px; background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%); 
         border-bottom: 3px solid #38bdf8; border-radius: 0 0 20px 20px; margin-bottom: 30px; 
@@ -59,7 +72,7 @@ st.markdown("""
     .main-header h1 { color: #38bdf8; margin: 0; font-size: 1.8rem; font-weight: 800; text-shadow: 0 0 10px rgba(56, 189, 248, 0.3); }
     .main-header p { color: #94a3b8; margin: 5px 0 0 0; font-size: 0.85rem; letter-spacing: 1px; }
     
-    /* Tombol Menu ala Dashboard Modern */
+    /* Tombol Menu */
     div.stButton > button { 
         width: 100%; height: 80px !important; background: #1e293b !important; 
         border: 1px solid #334155 !important; border-radius: 15px !important; 
@@ -71,17 +84,17 @@ st.markdown("""
         transform: translateY(-3px); box-shadow: 0 10px 20px rgba(0,0,0,0.4);
     }
     
-    /* Input Form agar lebih rapi (UX) */
+    /* Input Form UX */
     .stSelectbox, .stTextInput, .stTextArea {
         background-color: #1e293b !important; border-radius: 10px !important;
     }
-    
-    /* Highlight Area Input (Gojek Vibes) */
     div[data-testid="stForm"] {
         background: #1e293b; border-radius: 20px; padding: 20px; border: 1px solid #334155;
     }
-    
     label { color: #38bdf8 !important; font-size: 0.9rem !important; margin-bottom: 5px !important; }
+    
+    /* Padding untuk Mobile */
+    .block-container { padding-top: 1rem !important; padding-bottom: 1rem !important; }
     </style>
     """, unsafe_allow_html=True)
 
@@ -178,7 +191,7 @@ if st.session_state.hal == 'Menu':
             if st.button("⚠️ LAPOR GANGGUAN"): pindah('Gangguan'); st.rerun()
             if st.button("🔄 UPDATE PERBAIKAN"): pindah('Update'); st.rerun()
             if st.button("📊 STATISTIK"): pindah('Statistik'); st.rerun()
-            if st.button("ℹ️ INFO SISTEM"): st.toast("SIMANTAP ME v2.2 Steril Platinum", icon="⚡")
+            if st.button("ℹ️ INFO SISTEM"): st.toast("SIMANTAP ME v2.3 Ultimate Clean", icon="⚡")
     st.markdown("---")
     st.caption("<center>© 2026 KPwBI Balikpapan - Unit MI</center>", unsafe_allow_html=True)
 
