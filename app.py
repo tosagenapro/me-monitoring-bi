@@ -36,7 +36,7 @@ SOW_MASTER = {
         "Bulanan": ["Tegangan Output (Volt)", "Frekuensi (Hz)", "Cek sistem proteksi"]
     },
     "UPS": {
-        "Harian": ["Kapasitas Baterai (%)", "Tegangan Input (Volt)", "Indikator Lampu"],
+        "Harian": ["Kapasitas Baterai (%)", "Tegangan Input (Volt) ", "Indikator Lampu"],
         "Mingguan": ["Tegangan Output (Volt)", "Suhu Battery Pack (°C)", "Cek Fan"],
         "Bulanan": ["Uji Discharge (Menit)", "Kekencangan terminal", "Laporan Load"]
     },
@@ -117,7 +117,7 @@ def generate_pdf_final(df, rentang, peg, tek, judul, tipe="Maintenance"):
                 pdf.cell(w[0], 10, str(row.get('Nama Aset','')), 1); pdf.cell(w[1], 10, str(row.get('periode','')), 1)
                 pdf.cell(w[2], 10, str(row.get('teknisi','')), 1); pdf.cell(w[3], 10, str(row.get('kondisi','')), 1)
                 pdf.cell(w[4], 10, str(row.get('keterangan',''))[:95], 1); pdf.ln()
-        else: # Tipe Gangguan
+        else:
             w = [60, 70, 30, 30, 80]
             cols = ["Nama Aset", "Masalah", "Pelapor", "Status", "Tindakan Perbaikan"]
             for i in range(len(cols)): pdf.cell(w[i], 10, cols[i], 1, 0, "C", True)
@@ -127,13 +127,18 @@ def generate_pdf_final(df, rentang, peg, tek, judul, tipe="Maintenance"):
                 pdf.cell(w[2], 10, str(row.get('teknisi','')), 1); pdf.cell(w[3], 10, str(row.get('status','')), 1)
                 pdf.cell(w[4], 10, str(row.get('tindakan_perbaikan',''))[:60], 1); pdf.ln()
 
-        # SIGNATURE SECTION
+        # --- SIGNATURE SECTION ---
         pdf.ln(10); pdf.set_font("Helvetica", "", 10)
-        pdf.cell(138, 5, "Known,", 0, 0, "C"); pdf.cell(138, 5, "Dibuat oleh,", 0, 1, "C")
-        pdf.cell(138, 5, f'"{peg.get("posisi", "")}"', 0, 0, "C"); pdf.cell(138, 5, "CV. INDO MEGA JAYA", 0, 1, "C")
+        pdf.cell(138, 5, "Diketahui,", 0, 0, "C"); pdf.cell(138, 5, "Dibuat oleh,", 0, 1, "C")
+        
+        # Bersihkan tanda petik dari posisi
+        posisi_peg = str(peg.get('posisi', '')).replace('"', '')
+        pdf.cell(138, 5, posisi_peg, 0, 0, "C"); pdf.cell(138, 5, "CV. INDO MEGA JAYA", 0, 1, "C")
         pdf.ln(20)
-        pdf.set_font("Helvetica", "BU", 10)
+        
+        pdf.set_font("Helvetica", "BU", 10) # Nama Underlined
         pdf.cell(138, 5, str(peg.get('nama', '')), 0, 0, "C"); pdf.cell(138, 5, str(tek.get('nama', '')), 0, 1, "C")
+        
         pdf.set_font("Helvetica", "", 10)
         pdf.cell(138, 5, str(peg.get('jabatan_pdf', '')), 0, 0, "C"); pdf.cell(138, 5, "Teknisi ME", 0, 1, "C")
         
@@ -236,7 +241,7 @@ elif st.session_state.hal == 'Update':
                         st.success("Berhasil!"); time.sleep(1); st.rerun()
     else: st.info("Tidak ada perbaikan.")
 
-# --- HALAMAN EXPORT (DENGAN FILTER PERIODE) ---
+# --- HALAMAN EXPORT ---
 elif st.session_state.hal == 'Export':
     if st.button("⬅️ KEMBALI"): pindah('Menu'); st.rerun()
     st.subheader("📑 Ekspor Laporan PDF")
@@ -248,7 +253,6 @@ elif st.session_state.hal == 'Export':
         dr = st.date_input("Rentang Tanggal", [datetime.date.today() - datetime.timedelta(days=7), datetime.date.today()])
     with c2:
         if tipe_lap == "Checklist Maintenance":
-            # FILTER PERIODE TAMBAHAN
             p_filter = st.selectbox("Pilih Periode Checklist:", ["SEMUA", "Harian", "Mingguan", "Bulanan"])
     
     if len(dr) == 2:
@@ -257,24 +261,17 @@ elif st.session_state.hal == 'Export':
             if data:
                 df = pd.DataFrame(data)
                 df['Nama Aset'] = df['assets'].apply(lambda x: x['nama_aset'])
-                # Filter Tanggal
                 df_f = df[(pd.to_datetime(df['created_at']).dt.date >= dr[0]) & (pd.to_datetime(df['created_at']).dt.date <= dr[1])]
-                
-                # FILTER PERIODE (LOGIKA TAMBAHAN)
                 if p_filter != "SEMUA":
                     df_f = df_f[df_f['periode'] == p_filter]
                 
-                st.write(f"📊 Menampilkan {len(df_f)} data {p_filter}")
                 st.dataframe(df_f[['Nama Aset', 'periode', 'teknisi', 'kondisi', 'created_at']], use_container_width=True)
-                
                 if not df_f.empty:
-                    p, t = st.selectbox("Pilih Penandatangan (Known):", list_peg), st.selectbox("Pilih Penandatangan (Dibuat):", list_tek)
+                    p, t = st.selectbox("Pilih Penandatangan (Diketahui):", list_peg), st.selectbox("Pilih Penandatangan (Dibuat):", list_tek)
                     if st.button("📄 CETAK PDF MAINTENANCE"):
                         b = generate_pdf_final(df_f, f"{dr[0]} - {dr[1]} ({p_filter})", staff_map[p], staff_map[t], "LAPORAN MAINTENANCE", "Maintenance")
                         if b: st.download_button("Download PDF", b, f"Maintenance_{p_filter}_{dr[0]}.pdf")
-        
         else:
-            # Bagian Log Gangguan tetap sama seperti kode sebelumnya
             data = supabase.table("gangguan_logs").select("*, assets(nama_aset)").order("created_at", desc=True).execute().data
             if data:
                 df = pd.DataFrame(data)
@@ -282,7 +279,7 @@ elif st.session_state.hal == 'Export':
                 df_f = df[(pd.to_datetime(df['created_at']).dt.date >= dr[0]) & (pd.to_datetime(df['created_at']).dt.date <= dr[1])]
                 st.dataframe(df_f[['Nama Aset', 'masalah', 'teknisi', 'status', 'tindakan_perbaikan']], use_container_width=True)
                 if not df_f.empty:
-                    p, t = st.selectbox("Pilih Penandatangan (Known):", list_peg), st.selectbox("Pilih Penandatangan (Dibuat):", list_tek)
+                    p, t = st.selectbox("Pilih Penandatangan (Diketahui):", list_peg), st.selectbox("Pilih Penandatangan (Dibuat):", list_tek)
                     if st.button("📄 CETAK PDF GANGGUAN"):
                         b = generate_pdf_final(df_f, f"{dr[0]} - {dr[1]}", staff_map[p], staff_map[t], "LAPORAN KERUSAKAN", "Gangguan")
                         if b: st.download_button("Download PDF", b, f"Gangguan_{dr[0]}.pdf")
