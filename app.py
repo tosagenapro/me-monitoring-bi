@@ -52,19 +52,44 @@ SOW_MASTER = {
     }
 }
 
-# --- 3. CSS CUSTOM ---
+# --- 3. CSS CUSTOM (EFEK MELAYANG / HOVER) ---
 st.markdown("""
     <style>
     #MainMenu {visibility: hidden;} footer {visibility: hidden;} header {visibility: hidden;}
     .stApp { background: #0f172a; }
+    
+    /* Header Style */
     .main-header { 
         text-align: center; padding: 20px; background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%); 
         border-bottom: 3px solid #38bdf8; border-radius: 0 0 20px 20px; margin-bottom: 20px; 
     }
     .main-header h1 { color: #38bdf8; margin: 0; font-size: 1.6rem; font-weight: 800; }
-    .stat-card { background: #1e293b; border-radius: 12px; padding: 15px; border-bottom: 3px solid #38bdf8; text-align: center; }
-    div.stButton > button { width: 100%; height: 50px !important; background: #1e293b !important; border: 1px solid #334155 !important; border-radius: 10px !important; color: #f8fafc !important; font-weight: bold !important; }
-    div.stButton > button:hover { border-color: #38bdf8 !important; }
+    
+    /* Stat Card Style */
+    .stat-card { background: #1e293b; border-radius: 12px; padding: 15px; border-bottom: 3px solid #38bdf8; text-align: center; transition: 0.3s; }
+    .stat-card:hover { transform: translateY(-5px); box-shadow: 0 10px 20px rgba(0,0,0,0.3); }
+
+    /* EFEK TOMBOL MELAYANG (HOVER) */
+    div.stButton > button { 
+        width: 100%; 
+        height: 60px !important; 
+        background: #1e293b !important; 
+        border: 1px solid #334155 !important; 
+        border-radius: 12px !important; 
+        color: #f8fafc !important; 
+        font-weight: bold !important;
+        transition: all 0.3s ease-in-out !important; /* Transisi halus */
+    }
+
+    div.stButton > button:hover { 
+        border-color: #38bdf8 !important; 
+        color: #38bdf8 !important;
+        background: #1e294b !important;
+        transform: translateY(-5px) !important; /* Efek melayang ke atas */
+        box-shadow: 0 8px 15px rgba(56, 189, 248, 0.2) !important; /* Cahaya biru halus */
+    }
+
+    /* Styling Form */
     div[data-testid="stForm"] { background: #1e293b; border-radius: 15px; padding: 20px; border: 1px solid #334155; }
     </style>
     """, unsafe_allow_html=True)
