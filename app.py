@@ -236,13 +236,20 @@ elif st.session_state.hal == 'Update':
                         st.success("Berhasil!"); time.sleep(1); st.rerun()
     else: st.info("Tidak ada perbaikan.")
 
-# --- HALAMAN EXPORT (MODUL LAPORAN FINAL) ---
+# --- HALAMAN EXPORT (DENGAN FILTER PERIODE) ---
 elif st.session_state.hal == 'Export':
     if st.button("⬅️ KEMBALI"): pindah('Menu'); st.rerun()
     st.subheader("📑 Ekspor Laporan PDF")
     
     tipe_lap = st.segmented_control("Pilih Tipe Laporan:", ["Checklist Maintenance", "Log Gangguan & Perbaikan"], default="Checklist Maintenance")
-    dr = st.date_input("Rentang Tanggal", [datetime.date.today() - datetime.timedelta(days=7), datetime.date.today()])
+    
+    c1, c2 = st.columns(2)
+    with c1:
+        dr = st.date_input("Rentang Tanggal", [datetime.date.today() - datetime.timedelta(days=7), datetime.date.today()])
+    with c2:
+        if tipe_lap == "Checklist Maintenance":
+            # FILTER PERIODE TAMBAHAN
+            p_filter = st.selectbox("Pilih Periode Checklist:", ["SEMUA", "Harian", "Mingguan", "Bulanan"])
     
     if len(dr) == 2:
         if tipe_lap == "Checklist Maintenance":
@@ -250,14 +257,24 @@ elif st.session_state.hal == 'Export':
             if data:
                 df = pd.DataFrame(data)
                 df['Nama Aset'] = df['assets'].apply(lambda x: x['nama_aset'])
+                # Filter Tanggal
                 df_f = df[(pd.to_datetime(df['created_at']).dt.date >= dr[0]) & (pd.to_datetime(df['created_at']).dt.date <= dr[1])]
+                
+                # FILTER PERIODE (LOGIKA TAMBAHAN)
+                if p_filter != "SEMUA":
+                    df_f = df_f[df_f['periode'] == p_filter]
+                
+                st.write(f"📊 Menampilkan {len(df_f)} data {p_filter}")
                 st.dataframe(df_f[['Nama Aset', 'periode', 'teknisi', 'kondisi', 'created_at']], use_container_width=True)
+                
                 if not df_f.empty:
                     p, t = st.selectbox("Pilih Penandatangan (Known):", list_peg), st.selectbox("Pilih Penandatangan (Dibuat):", list_tek)
                     if st.button("📄 CETAK PDF MAINTENANCE"):
-                        b = generate_pdf_final(df_f, f"{dr[0]} - {dr[1]}", staff_map[p], staff_map[t], "LAPORAN MAINTENANCE", "Maintenance")
-                        if b: st.download_button("Download PDF", b, f"Maintenance_{dr[0]}.pdf")
+                        b = generate_pdf_final(df_f, f"{dr[0]} - {dr[1]} ({p_filter})", staff_map[p], staff_map[t], "LAPORAN MAINTENANCE", "Maintenance")
+                        if b: st.download_button("Download PDF", b, f"Maintenance_{p_filter}_{dr[0]}.pdf")
+        
         else:
+            # Bagian Log Gangguan tetap sama seperti kode sebelumnya
             data = supabase.table("gangguan_logs").select("*, assets(nama_aset)").order("created_at", desc=True).execute().data
             if data:
                 df = pd.DataFrame(data)
