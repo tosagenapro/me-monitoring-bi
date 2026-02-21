@@ -115,16 +115,13 @@ def add_timestamp(image_file):
 def upload_foto(file):
     if file:
         proc_img = add_timestamp(file)
+        # Langsung di root bucket agar URL tidak dobel folder
         fname = f"{uuid.uuid4()}.jpg"
         try:
             supabase.storage.from_("foto_maintenance").upload(fname, proc_img, {"content-type":"image/jpeg"})
             res = supabase.storage.from_("foto_maintenance").get_public_url(fname)
             url = res if isinstance(res, str) else res.get('publicURL', res)
-            
-            # Anti-double public cleaner
-            if "public/public" in url:
-                url = url.replace("public/public", "public")
-                
+            if "public/public" in url: url = url.replace("public/public", "public")
             return f"{url}?t={int(time.time())}"
         except Exception as e:
             st.error(f"Gagal Upload: {e}"); return None
@@ -160,7 +157,7 @@ def generate_pdf_final(df, rentang, peg, tek, judul, tipe="Maintenance"):
                 pdf.cell(w[4], 10, str(r.get('tindakan_perbaikan',''))[:75], 1)
             pdf.ln()
 
-        # --- SIGNATURE SECTION (Sesuai Permintaan Pak Dani) ---
+        # --- SIGNATURE SECTION ---
         pdf.ln(10); pdf.set_font("Helvetica", "", 10)
         pdf.cell(138, 5, "Known,", 0, 0, "C"); pdf.cell(138, 5, "Dibuat oleh,", 0, 1, "C")
         
@@ -168,11 +165,9 @@ def generate_pdf_final(df, rentang, peg, tek, judul, tipe="Maintenance"):
         pdf.cell(138, 5, posisi_peg, 0, 0, "C"); pdf.cell(138, 5, "CV. INDO MEGA JAYA", 0, 1, "C")
         pdf.ln(20)
         
-        # Nama Underlined (BU)
-        pdf.set_font("Helvetica", "BU", 10)
-        pdf.cell(138, 5, str(peg.get('nama', '')), 0, 0, "C"); pdf.cell(138, 5, str(tek.get('nama', '')), 0, 1, "C")
+        pdf.set_font("Helvetica", "BU", 10) # BOLD & UNDERLINE
+        pdf.cell(138, 5, str(peg.get('name', '')), 0, 0, "C"); pdf.cell(138, 5, str(tek.get('name', '')), 0, 1, "C")
         
-        # Jabatan_pdf
         pdf.set_font("Helvetica", "", 10)
         pdf.cell(138, 5, str(peg.get('Jabatan_pdf', '')), 0, 0, "C"); pdf.cell(138, 5, "Teknisi ME", 0, 1, "C")
 
@@ -197,16 +192,17 @@ def generate_pdf_final(df, rentang, peg, tek, judul, tipe="Maintenance"):
                             return io.BytesIO(res.content) if res.status_code == 200 else None
                         except: return None
 
+                    # Parameter type='JPG' ditambahkan untuk cegah error rfind
                     img_b = download_img(f_b)
                     if img_b:
-                        pdf.image(img_b, x=10, y=cy, w=60)
+                        pdf.image(img_b, x=10, y=cy, w=60, type='JPG')
                         pdf.set_xy(10, cy+42); pdf.cell(60, 5, "Before", 0, 0, "C")
                     elif f_b and str(f_b) != "None":
                         pdf.set_xy(10, cy+15); pdf.cell(60, 5, "[Foto Error]", 0, 0, "C")
 
                     img_a = download_img(f_a)
                     if img_a:
-                        pdf.image(img_a, x=80, y=cy, w=60)
+                        pdf.image(img_a, x=80, y=cy, w=60, type='JPG')
                         pdf.set_xy(80, cy+42); pdf.cell(60, 5, "After", 0, 0, "C")
                     elif f_a and str(f_a) != "None":
                         pdf.set_xy(80, cy+15); pdf.cell(60, 5, "[Foto Error]", 0, 0, "C")
@@ -227,7 +223,7 @@ def pindah(n): st.session_state.hal = n
 
 st.markdown("""<div class="main-header"><h1>⚡ SIMANTAP ME | KPwBI BALIKPAPAN</h1></div>""", unsafe_allow_html=True)
 
-# --- 7. HALAMAN (LOGIC LANJUTAN) ---
+# --- 7. HALAMAN ---
 
 # A. LANDING QR
 if st.session_state.hal == 'LandingQR':
