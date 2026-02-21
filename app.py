@@ -334,3 +334,4 @@ elif st.session_state.hal == 'Statistik':
         c1, c2 = st.columns(2)
         with c1: st.plotly_chart(px.pie(df_g, names='status', title="Status Laporan Gangguan", hole=0.4))
         with c2: st.plotly_chart(px.bar(df_g, x='urgensi', title="Tingkat Urgensi Gangguan"))
+
