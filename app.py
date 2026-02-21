@@ -98,18 +98,16 @@ list_kat_master = ["SEMUA", "AC", "AHU", "UPS", "BAS", "PANEL", "GENSET", "UMUM"
 
 def add_timestamp(image_file):
     img = Image.open(image_file)
-    # Resize untuk performa (Max 800px lebar)
+    if img.mode != 'RGB': img = img.convert('RGB')
     max_w = 800
     w_per = (max_w / float(img.size[0]))
     h_size = int((float(img.size[1]) * float(w_per)))
     img = img.resize((max_w, h_size), Image.Resampling.LANCZOS)
-    
     draw = ImageDraw.Draw(img)
     text = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     w, h = img.size
     draw.rectangle([w-170, h-30, w-10, h-10], fill="black")
     draw.text((w-160, h-25), text, fill="white")
-    
     buf = io.BytesIO()
     img.save(buf, format="JPEG", quality=75, optimize=True)
     return buf.getvalue()
@@ -117,12 +115,14 @@ def add_timestamp(image_file):
 def upload_foto(file):
     if file:
         proc_img = add_timestamp(file)
+        # Sesuai folder 'public' di dalam bucket Anda
         fname = f"public/{uuid.uuid4()}.jpg"
         try:
             supabase.storage.from_("foto_maintenance").upload(fname, proc_img, {"content-type":"image/jpeg"})
-            # Ambil Public URL secara eksplisit
-            res_url = supabase.storage.from_("foto_maintenance").get_public_url(fname)
-            return res_url if isinstance(res_url, str) else res_url.get('publicURL', res_url)
+            res = supabase.storage.from_("foto_maintenance").get_public_url(fname)
+            url = res if isinstance(res, str) else res.get('publicURL', res)
+            # Tambahkan cache-buster agar PDF tidak error mendownload file yang sama
+            return f"{url}?t={int(time.time())}"
         except Exception as e:
             st.error(f"Gagal Upload: {e}"); return None
     return None
@@ -151,50 +151,49 @@ def generate_pdf_final(df, rentang, peg, tek, judul, tipe="Maintenance"):
                 pdf.cell(w[2], 10, str(r.get('teknisi','')), 1); pdf.cell(w[3], 10, str(r.get('status','')), 1)
                 pdf.cell(w[4], 10, str(r.get('tindakan_perbaikan',''))[:75], 1); pdf.ln()
 
-        # Signature - Format Request Bapak Dani
+        # --- SIGNATURE SECTION (Format Request Bapak Dani) ---
         pdf.ln(10); pdf.set_font("Helvetica", "", 10)
-        pdf.cell(138, 5, "Diketahui,", 0, 0, "C"); pdf.cell(138, 5, "Dibuat oleh,", 0, 1, "C")
+        pdf.cell(138, 5, "Known,", 0, 0, "C"); pdf.cell(138, 5, "Dibuat oleh,", 0, 1, "C")
         posisi_peg = str(peg.get('posisi', '')).replace('"', '')
         pdf.cell(138, 5, posisi_peg, 0, 0, "C"); pdf.cell(138, 5, "CV. INDO MEGA JAYA", 0, 1, "C")
-        pdf.ln(15); pdf.set_font("Helvetica", "BU", 10)
+        pdf.ln(15)
+        
+        # Nama Underlined (BU)
+        pdf.set_font("Helvetica", "BU", 10)
         pdf.cell(138, 5, str(peg.get('nama', '')), 0, 0, "C"); pdf.cell(138, 5, str(tek.get('nama', '')), 0, 1, "C")
+        
+        # Jabatan_pdf
         pdf.set_font("Helvetica", "", 10)
         pdf.cell(138, 5, str(peg.get('jabatan_pdf', '')), 0, 0, "C"); pdf.cell(138, 5, "Teknisi ME", 0, 1, "C")
 
-        # Halaman Lampiran Foto (Khusus Log Gangguan)
+        # --- LAMPIRAN FOTO ---
         if tipe != "Maintenance":
             pdf.add_page(); pdf.set_font("Helvetica", "B", 12)
             pdf.cell(0, 10, "LAMPIRAN DOKUMENTASI PERBAIKAN", ln=True, align="C"); pdf.ln(5)
-            
             headers = {"User-Agent": "Mozilla/5.0"}
             for _, r in df.iterrows():
                 f_b, f_a = r.get('foto_kerusakan_url'), r.get('foto_setelah_perbaikan_url')
-                if f_b or f_a:
+                if (f_b and str(f_b) != "None") or (f_a and str(f_a) != "None"):
                     pdf.set_font("Helvetica", "B", 9); pdf.cell(0, 7, f"Unit: {r['Nama Aset']}", ln=True)
-                    curr_y = pdf.get_y()
-                    
-                    if f_b:
+                    cy = pdf.get_y()
+                    # Handling Before Photo
+                    if f_b and str(f_b) != "None":
                         try:
-                            resp = requests.get(f_b, headers=headers, timeout=10)
-                            if resp.status_code == 200:
-                                img_data = io.BytesIO(resp.content)
-                                pdf.image(img_data, x=10, y=curr_y, w=60)
-                                pdf.set_xy(10, curr_y+42); pdf.cell(60, 5, "Before", 0, 0, "C")
-                            else: pdf.set_xy(10, curr_y+15); pdf.cell(60, 5, "[Error Download]", 0, 0, "C")
-                        except: pdf.set_xy(10, curr_y+15); pdf.cell(60, 5, "[Foto Error]", 0, 0, "C")
-                    
-                    if f_a:
+                            res = requests.get(f_b, headers=headers, timeout=15)
+                            if res.status_code == 200:
+                                pdf.image(io.BytesIO(res.content), x=10, y=cy, w=60)
+                                pdf.set_xy(10, cy+42); pdf.cell(60, 5, "Before", 0, 0, "C")
+                        except: pdf.set_xy(10, cy+15); pdf.cell(60, 5, "[Foto Error]", 0, 0, "C")
+                    # Handling After Photo
+                    if f_a and str(f_a) != "None":
                         try:
-                            resp_a = requests.get(f_a, headers=headers, timeout=10)
-                            if resp_a.status_code == 200:
-                                img_data_a = io.BytesIO(resp_a.content)
-                                pdf.image(img_data_a, x=80, y=curr_y, w=60)
-                                pdf.set_xy(80, curr_y+42); pdf.cell(60, 5, "After", 0, 0, "C")
-                            else: pdf.set_xy(80, curr_y+15); pdf.cell(60, 5, "[Error Download]", 0, 0, "C")
-                        except: pdf.set_xy(80, curr_y+15); pdf.cell(60, 5, "[Foto Error]", 0, 0, "C")
-                    
+                            res_a = requests.get(f_a, headers=headers, timeout=15)
+                            if res_a.status_code == 200:
+                                pdf.image(io.BytesIO(res_a.content), x=80, y=cy, w=60)
+                                pdf.set_xy(80, cy+42); pdf.cell(60, 5, "After", 0, 0, "C")
+                        except: pdf.set_xy(80, cy+15); pdf.cell(60, 5, "[Foto Error]", 0, 0, "C")
                     pdf.ln(55)
-                    if pdf.get_y() > 170: pdf.add_page()
+                    if pdf.get_y() > 180: pdf.add_page()
                     
         return pdf.output(dest='S').encode('latin-1')
     except Exception as e:
@@ -250,7 +249,7 @@ elif st.session_state.hal == 'Menu':
     with cb2:
         if st.button("🖼️ MASTER QR"): pindah('MasterQR'); st.rerun()
 
-# C. CHECKLIST (HARIAN/MINGGUAN/BULANAN)
+# C. CHECKLIST
 elif st.session_state.hal in ['Harian', 'Mingguan', 'Bulanan']:
     st.subheader(f"📋 Checklist {st.session_state.hal}")
     is_qr = 'sel_asset_qr' in st.session_state
@@ -343,8 +342,7 @@ elif st.session_state.hal == 'Export':
             df_f = df[(pd.to_datetime(df['created_at']).dt.date >= dr[0]) & (pd.to_datetime(df['created_at']).dt.date <= dr[1])]
             if tipe_lap == "Checklist Maintenance" and p_filter != "SEMUA": df_f = df_f[df_f['periode'] == p_filter]
             
-            kol = ['Nama Aset', 'periode', 'teknisi', 'kondisi', 'created_at'] if tipe_lap=="Checklist Maintenance" else ['Nama Aset', 'masalah', 'teknisi', 'status', 'tindakan_perbaikan']
-            st.dataframe(df_f[kol], use_container_width=True)
+            st.dataframe(df_f, use_container_width=True)
             if not df_f.empty:
                 p, t = st.selectbox("Diketahui:", list_peg), st.selectbox("Dibuat:", list_tek)
                 if st.button("📄 CETAK PDF"):
