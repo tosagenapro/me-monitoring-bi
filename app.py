@@ -57,7 +57,7 @@ SOW_MASTER = {
     }
 }
 
-# --- 4. CSS CUSTOM (EFEK MELAYANG & LANDING) ---
+# --- 4. CSS CUSTOM (EFEK MELAYANG & TAMPILAN MODERN) ---
 st.markdown("""
     <style>
     #MainMenu {visibility: hidden;} footer {visibility: hidden;} header {visibility: hidden;}
@@ -305,15 +305,25 @@ elif st.session_state.hal == 'Export':
         data = supabase.table(tbl).select("*, assets(nama_aset)").order("created_at", desc=True).execute().data
         if data:
             df = pd.DataFrame(data)
-            df['Nama Aset'] = df['assets'].apply(lambda x: x['nama_aset'])
+            # Merapikan nama aset (Hide JSON raw)
+            df['Nama Aset'] = df['assets'].apply(lambda x: x['nama_aset'] if x else "N/A")
             df_f = df[(pd.to_datetime(df['created_at']).dt.date >= dr[0]) & (pd.to_datetime(df['created_at']).dt.date <= dr[1])]
-            if tipe_lap == "Checklist Maintenance" and p_filter != "SEMUA": df_f = df_f[df_f['periode'] == p_filter]
-            st.dataframe(df_f, use_container_width=True)
+            
+            if tipe_lap == "Checklist Maintenance":
+                if p_filter != "SEMUA": df_f = df_f[df_f['periode'] == p_filter]
+                kolom_tampil = ['Nama Aset', 'periode', 'teknisi', 'kondisi', 'created_at']
+            else:
+                kolom_tampil = ['Nama Aset', 'masalah', 'teknisi', 'status', 'tindakan_perbaikan']
+
+            # Tampilkan dataframe yang sudah difilter kolomnya
+            st.dataframe(df_f[kolom_tampil], use_container_width=True)
+            
             if not df_f.empty:
                 p, t = st.selectbox("Diketahui:", list_peg), st.selectbox("Dibuat:", list_tek)
                 if st.button("📄 CETAK PDF"):
                     b = generate_pdf_final(df_f, f"{dr[0]} - {dr[1]}", staff_map[p], staff_map[t], "LAPORAN", "Maintenance" if tipe_lap == "Checklist Maintenance" else "Gangguan")
                     if b: st.download_button("Download", b, f"Laporan_{dr[0]}.pdf")
+        else: st.info("Tidak ada data ditemukan.")
 
 # H. STATISTIK
 elif st.session_state.hal == 'Statistik':
@@ -322,5 +332,5 @@ elif st.session_state.hal == 'Statistik':
     if raw_g:
         df_g = pd.DataFrame(raw_g)
         c1, c2 = st.columns(2)
-        with c1: st.plotly_chart(px.pie(df_g, names='status', title="Status", hole=0.4))
-        with c2: st.plotly_chart(px.bar(df_g, x='urgensi', title="Urgensi"))
+        with c1: st.plotly_chart(px.pie(df_g, names='status', title="Status Laporan Gangguan", hole=0.4))
+        with c2: st.plotly_chart(px.bar(df_g, x='urgensi', title="Tingkat Urgensi Gangguan"))
