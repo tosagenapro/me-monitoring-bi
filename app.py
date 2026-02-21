@@ -80,7 +80,7 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-# --- 5. FUNGSI ---
+# --- 5. FUNGSI INTI ---
 @st.cache_data(ttl=30)
 def load_data():
     a = supabase.table("assets").select("*").order("nama_aset").limit(200).execute().data
@@ -98,13 +98,20 @@ list_kat_master = ["SEMUA", "AC", "AHU", "UPS", "BAS", "PANEL", "GENSET", "UMUM"
 
 def add_timestamp(image_file):
     img = Image.open(image_file)
+    # Resize untuk performa (Max 800px lebar)
+    max_w = 800
+    w_per = (max_w / float(img.size[0]))
+    h_size = int((float(img.size[1]) * float(w_per)))
+    img = img.resize((max_w, h_size), Image.Resampling.LANCZOS)
+    
     draw = ImageDraw.Draw(img)
     text = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     w, h = img.size
-    draw.rectangle([w-220, h-35, w-10, h-10], fill="black")
-    draw.text((w-210, h-30), text, fill="white")
+    draw.rectangle([w-170, h-30, w-10, h-10], fill="black")
+    draw.text((w-160, h-25), text, fill="white")
+    
     buf = io.BytesIO()
-    img.save(buf, format="JPEG")
+    img.save(buf, format="JPEG", quality=75, optimize=True)
     return buf.getvalue()
 
 def upload_foto(file):
@@ -113,8 +120,11 @@ def upload_foto(file):
         fname = f"public/{uuid.uuid4()}.jpg"
         try:
             supabase.storage.from_("foto_maintenance").upload(fname, proc_img, {"content-type":"image/jpeg"})
-            return f"{URL}/storage/v1/object/public/foto_maintenance/{fname}"
-        except: return None
+            # Ambil Public URL secara eksplisit
+            res_url = supabase.storage.from_("foto_maintenance").get_public_url(fname)
+            return res_url if isinstance(res_url, str) else res_url.get('publicURL', res_url)
+        except Exception as e:
+            st.error(f"Gagal Upload: {e}"); return None
     return None
 
 def generate_pdf_final(df, rentang, peg, tek, judul, tipe="Maintenance"):
@@ -141,7 +151,7 @@ def generate_pdf_final(df, rentang, peg, tek, judul, tipe="Maintenance"):
                 pdf.cell(w[2], 10, str(r.get('teknisi','')), 1); pdf.cell(w[3], 10, str(r.get('status','')), 1)
                 pdf.cell(w[4], 10, str(r.get('tindakan_perbaikan',''))[:75], 1); pdf.ln()
 
-        # Signature - Berdasarkan Request Format Bapak
+        # Signature - Format Request Bapak Dani
         pdf.ln(10); pdf.set_font("Helvetica", "", 10)
         pdf.cell(138, 5, "Diketahui,", 0, 0, "C"); pdf.cell(138, 5, "Dibuat oleh,", 0, 1, "C")
         posisi_peg = str(peg.get('posisi', '')).replace('"', '')
@@ -151,27 +161,41 @@ def generate_pdf_final(df, rentang, peg, tek, judul, tipe="Maintenance"):
         pdf.set_font("Helvetica", "", 10)
         pdf.cell(138, 5, str(peg.get('jabatan_pdf', '')), 0, 0, "C"); pdf.cell(138, 5, "Teknisi ME", 0, 1, "C")
 
-        # Halaman Lampiran Foto (Khusus Gangguan)
+        # Halaman Lampiran Foto (Khusus Log Gangguan)
         if tipe != "Maintenance":
             pdf.add_page(); pdf.set_font("Helvetica", "B", 12)
             pdf.cell(0, 10, "LAMPIRAN DOKUMENTASI PERBAIKAN", ln=True, align="C"); pdf.ln(5)
+            
+            headers = {"User-Agent": "Mozilla/5.0"}
             for _, r in df.iterrows():
                 f_b, f_a = r.get('foto_kerusakan_url'), r.get('foto_setelah_perbaikan_url')
                 if f_b or f_a:
                     pdf.set_font("Helvetica", "B", 9); pdf.cell(0, 7, f"Unit: {r['Nama Aset']}", ln=True)
                     curr_y = pdf.get_y()
+                    
                     if f_b:
                         try:
-                            res = requests.get(f_b); img = io.BytesIO(res.content)
-                            pdf.image(img, x=10, y=curr_y, w=60); pdf.set_xy(10, curr_y+42); pdf.cell(60, 5, "Before", 0, 0, "C")
-                        except: pdf.cell(60, 5, "[Error Foto]", 0, 0, "C")
+                            resp = requests.get(f_b, headers=headers, timeout=10)
+                            if resp.status_code == 200:
+                                img_data = io.BytesIO(resp.content)
+                                pdf.image(img_data, x=10, y=curr_y, w=60)
+                                pdf.set_xy(10, curr_y+42); pdf.cell(60, 5, "Before", 0, 0, "C")
+                            else: pdf.set_xy(10, curr_y+15); pdf.cell(60, 5, "[Error Download]", 0, 0, "C")
+                        except: pdf.set_xy(10, curr_y+15); pdf.cell(60, 5, "[Foto Error]", 0, 0, "C")
+                    
                     if f_a:
                         try:
-                            res = requests.get(f_a); img = io.BytesIO(res.content)
-                            pdf.image(img, x=80, y=curr_y, w=60); pdf.set_xy(80, curr_y+42); pdf.cell(60, 5, "After", 0, 0, "C")
-                        except: pdf.set_xy(80, curr_y+42); pdf.cell(60, 5, "[Error Foto]", 0, 0, "C")
+                            resp_a = requests.get(f_a, headers=headers, timeout=10)
+                            if resp_a.status_code == 200:
+                                img_data_a = io.BytesIO(resp_a.content)
+                                pdf.image(img_data_a, x=80, y=curr_y, w=60)
+                                pdf.set_xy(80, curr_y+42); pdf.cell(60, 5, "After", 0, 0, "C")
+                            else: pdf.set_xy(80, curr_y+15); pdf.cell(60, 5, "[Error Download]", 0, 0, "C")
+                        except: pdf.set_xy(80, curr_y+15); pdf.cell(60, 5, "[Foto Error]", 0, 0, "C")
+                    
                     pdf.ln(55)
                     if pdf.get_y() > 170: pdf.add_page()
+                    
         return pdf.output(dest='S').encode('latin-1')
     except Exception as e:
         st.error(f"Gagal PDF: {e}"); return None
@@ -185,7 +209,7 @@ def pindah(n): st.session_state.hal = n
 
 st.markdown("""<div class="main-header"><h1>⚡ SIMANTAP ME | KPwBI BALIKPAPAN</h1></div>""", unsafe_allow_html=True)
 
-# --- 7. HALAMAN-HALAMAN ---
+# --- 7. HALAMAN ---
 
 # A. LANDING QR
 if st.session_state.hal == 'LandingQR':
@@ -261,12 +285,11 @@ elif st.session_state.hal in ['Harian', 'Mingguan', 'Bulanan']:
 elif st.session_state.hal == 'Gangguan':
     if st.button("⬅️ KEMBALI"): pindah('Menu'); st.rerun()
     is_qr = 'sel_asset_qr' in st.session_state
-    if is_qr:
-        asset_data = st.session_state.sel_asset_qr
+    if is_qr: asset_data = st.session_state.sel_asset_qr
     else:
         kat_g = st.radio("Filter:", list_kat_master, horizontal=True)
-        list_p_g = list(opt_asset.keys()) if kat_g == "SEMUA" else [k for k, v in opt_asset.items() if str(v.get('kategori')).strip().upper() == kat_g.upper()]
-        asset_data = opt_asset[st.selectbox("Pilih Aset", list_p_g)]
+        lp = list(opt_asset.keys()) if kat_g=="SEMUA" else [k for k,v in opt_asset.items() if str(v.get('kategori')).strip().upper()==kat_g.upper()]
+        asset_data = opt_asset[st.selectbox("Pilih Aset", lp)]
 
     with st.form("f_g"):
         pel = st.selectbox("Pelapor", list_tek); urg = st.select_slider("Urgensi", ["Rendah", "Sedang", "Tinggi", "Darurat"])
@@ -293,17 +316,16 @@ elif st.session_state.hal == 'Update':
                         st.success("Berhasil!"); time.sleep(1); st.rerun()
     else: st.info("Tidak ada perbaikan tertunda.")
 
-# F. MASTER QR (KEMBALI HADIR)
+# F. MASTER QR
 elif st.session_state.hal == 'MasterQR':
     if st.button("⬅️ KEMBALI"): pindah('Menu'); st.rerun()
-    st.subheader("🖼️ Master QR Generator")
     sel_aset_name = st.selectbox("Pilih Aset untuk QR:", list(opt_asset.keys()))
     asset_data = opt_asset[sel_aset_name]
     full_url = f"{BASE_URL_APP}?unit={asset_data['kode_qr']}"
     qr_api = f"https://api.qrserver.com/v1/create-qr-code/?size=300x300&data={full_url}"
     c1, c2 = st.columns([1, 2])
     with c1: st.image(qr_api, caption=f"QR: {asset_data['kode_qr']}")
-    with c2: st.success(f"**Aset:** {asset_data['nama_aset']}"); st.code(full_url); st.info("Simpan gambar untuk dicetak.")
+    with c2: st.success(f"**Aset:** {asset_data['nama_aset']}"); st.code(full_url)
 
 # G. EXPORT
 elif st.session_state.hal == 'Export':
@@ -321,17 +343,17 @@ elif st.session_state.hal == 'Export':
             df_f = df[(pd.to_datetime(df['created_at']).dt.date >= dr[0]) & (pd.to_datetime(df['created_at']).dt.date <= dr[1])]
             if tipe_lap == "Checklist Maintenance" and p_filter != "SEMUA": df_f = df_f[df_f['periode'] == p_filter]
             
-            kol = ['Nama Aset', 'periode', 'teknisi', 'kondisi', 'created_at'] if tipe_lap == "Checklist Maintenance" else ['Nama Aset', 'masalah', 'teknisi', 'status', 'tindakan_perbaikan']
+            kol = ['Nama Aset', 'periode', 'teknisi', 'kondisi', 'created_at'] if tipe_lap=="Checklist Maintenance" else ['Nama Aset', 'masalah', 'teknisi', 'status', 'tindakan_perbaikan']
             st.dataframe(df_f[kol], use_container_width=True)
             if not df_f.empty:
                 p, t = st.selectbox("Diketahui:", list_peg), st.selectbox("Dibuat:", list_tek)
                 if st.button("📄 CETAK PDF"):
-                    with st.spinner("Memproses..."):
-                        b = generate_pdf_final(df_f, f"{dr[0]} - {dr[1]}", staff_map[p], staff_map[t], "LAPORAN", "Maintenance" if tipe_lap == "Checklist Maintenance" else "Gangguan")
+                    with st.spinner("Memproses Laporan & Gambar..."):
+                        b = generate_pdf_final(df_f, f"{dr[0]} - {dr[1]}", staff_map[p], staff_map[t], "LAPORAN", "Maintenance" if tipe_lap=="Checklist Maintenance" else "Gangguan")
                         if b: st.download_button("Download PDF", b, f"Laporan_{dr[0]}.pdf")
         else: st.info("Tidak ada data.")
 
-# H. STATISTIK (KEMBALI HADIR)
+# H. STATISTIK
 elif st.session_state.hal == 'Statistik':
     if st.button("⬅️ KEMBALI"): pindah('Menu'); st.rerun()
     raw_g = supabase.table("gangguan_logs").select("*").execute().data
