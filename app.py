@@ -8,7 +8,6 @@ import plotly.express as px
 import time
 import io
 import requests
-from PIL import Image, ImageDraw
 
 # --- 1. CONFIG & KONEKSI ---
 st.set_page_config(page_title="SIMANTAP ME BI BPP", page_icon="⚡", layout="wide", initial_sidebar_state="collapsed")
@@ -60,7 +59,7 @@ SOW_MASTER = {
     }
 }
 
-# --- 4. CSS CUSTOM & HEADER (FIX: Monitoring Aset dan Pemeliharaan Terpadu) ---
+# --- 4. CSS CUSTOM & HEADER (KEPANJANGAN FINAL) ---
 st.markdown("""
     <style>
     #MainMenu {visibility: hidden;} footer {visibility: hidden;} header {visibility: hidden;}
@@ -72,10 +71,12 @@ st.markdown("""
     .main-header h1 { color: #38bdf8; margin: 0; font-size: 1.8rem; font-weight: 800; letter-spacing: 1px; }
     .main-header p { color: #f8fafc; font-weight: 500; font-size: 1.1rem; margin: 12px 0 0 0; letter-spacing: 0.5px; }
     .stat-card { background: #1e293b; border-radius: 12px; padding: 15px; border-bottom: 3px solid #38bdf8; text-align: center; transition: 0.3s; }
+    .stat-card:hover { transform: translateY(-5px); box-shadow: 0 10px 20px rgba(0,0,0,0.3); }
     div.stButton > button { 
         width: 100%; height: 60px !important; background: #1e293b !important; border: 1px solid #334155 !important; 
-        border-radius: 12px !important; color: #f8fafc !important; font-weight: bold !important; 
+        border-radius: 12px !important; color: #f8fafc !important; font-weight: bold !important; transition: all 0.3s ease-in-out !important;
     }
+    div.stButton > button:hover { border-color: #38bdf8 !important; color: #38bdf8 !important; transform: translateY(-5px) !important; box-shadow: 0 8px 15px rgba(56, 189, 248, 0.2) !important; }
     div[data-testid="stForm"] { background: #1e293b; border-radius: 15px; padding: 20px; border: 1px solid #334155; }
     .qr-landing { background: #1e293b; padding: 25px; border-radius: 20px; border: 2px solid #38bdf8; text-align: center; margin-bottom: 20px; }
     </style>
@@ -103,20 +104,11 @@ list_kat_master = ["SEMUA", "AC", "AHU", "UPS", "BAS", "PANEL", "GENSET", "UMUM"
 
 def upload_foto(file):
     if file:
+        # Perbaikan: Langsung simpan ke root bucket agar sesuai dengan Public Link yang berfungsi
+        fname = f"{uuid.uuid4()}.jpg"
         try:
-            # Stamp Fitur
-            img = Image.open(file)
-            draw = ImageDraw.Draw(img)
-            waktu_st = datetime.datetime.now().strftime("%d/%m/%Y %H:%M:%S")
-            teks_st = f"SIMANTAP ME | {waktu_st}"
-            w, h = img.size
-            draw.text((w - 280, h - 50), teks_st, fill=(255, 255, 255)) 
-            
-            img_byte_arr = io.BytesIO()
-            img.save(img_byte_arr, format='JPEG', quality=85)
-            
-            fname = f"{uuid.uuid4()}.jpg"
-            supabase.storage.from_("foto_maintenance").upload(fname, img_byte_arr.getvalue(), {"content-type":"image/jpeg"})
+            supabase.storage.from_("foto_maintenance").upload(fname, file.getvalue(), {"content-type":"image/jpeg"})
+            # Return URL absolut yang sudah terbukti bisa dibuka
             return f"{URL}/storage/v1/object/public/foto_maintenance/{fname}"
         except: return None
     return None
@@ -151,12 +143,13 @@ def generate_pdf_final(df, rentang, peg, tek, judul, tipe="Maintenance"):
         pdf.cell(138, 5, "Known,", 0, 0, "C"); pdf.cell(138, 5, "Dibuat oleh,", 0, 1, "C")
         posisi_peg = str(peg.get('posisi', '')).replace('"', '')
         pdf.cell(138, 5, posisi_peg, 0, 0, "C"); pdf.cell(138, 5, "CV. INDO MEGA JAYA", 0, 1, "C")
-        pdf.ln(20); pdf.set_font("Helvetica", "BU", 10)
+        pdf.ln(20); pdf.set_font("Helvetica", "BU", 10) # Underlined name
         pdf.cell(138, 5, str(peg.get('nama', '')), 0, 0, "C"); pdf.cell(138, 5, str(tek.get('nama', '')), 0, 1, "C")
         pdf.set_font("Helvetica", "", 10)
         pdf.cell(138, 5, str(peg.get('jabatan_pdf', '')), 0, 0, "C"); pdf.cell(138, 5, "Teknisi ME", 0, 1, "C")
         return pdf.output(dest='S').encode('latin-1')
     except Exception as e:
+        st.error(f"Gagal generate PDF: {e}")
         return None
 
 # --- 6. ROUTING & STATE ---
@@ -165,7 +158,7 @@ if qr_code_detected and 'qr_handled' not in st.session_state:
     st.session_state.hal = 'LandingQR'
     st.session_state.qr_handled = True
 
-def pindah(n): st.session_state.hal = n; st.rerun()
+def pindah(n): st.session_state.hal = n
 
 # --- 7. HALAMAN-HALAMAN ---
 
@@ -176,12 +169,12 @@ if st.session_state.hal == 'LandingQR':
         st.markdown(f'<div class="qr-landing"><h2>📍 UNIT TERDETEKSI</h2><h3>{asset_qr["nama_aset"]}</h3><p>{asset_qr["kode_qr"]} | {asset_qr["kategori"]}</p></div>', unsafe_allow_html=True)
         c1, c2 = st.columns(2)
         with c1:
-            if st.button("☀️ HARIAN"): st.session_state.sel_asset_qr = asset_qr; pindah('Harian')
-            if st.button("📅 MINGGUAN"): st.session_state.sel_asset_qr = asset_qr; pindah('Mingguan')
+            if st.button("☀️ HARIAN"): st.session_state.sel_asset_qr = asset_qr; pindah('Harian'); st.rerun()
+            if st.button("📅 MINGGUAN"): st.session_state.sel_asset_qr = asset_qr; pindah('Mingguan'); st.rerun()
         with c2:
-            if st.button("🏆 BULANAN"): st.session_state.sel_asset_qr = asset_qr; pindah('Bulanan')
-            if st.button("⚠️ GANGGUAN"): st.session_state.sel_asset_qr = asset_qr; pindah('Gangguan')
-        if st.button("🏠 KE MENU UTAMA"): st.query_params.clear(); pindah('Menu')
+            if st.button("🏆 BULANAN"): st.session_state.sel_asset_qr = asset_qr; pindah('Bulanan'); st.rerun()
+            if st.button("⚠️ GANGGUAN"): st.session_state.sel_asset_qr = asset_qr; pindah('Gangguan'); st.rerun()
+        if st.button("🏠 KE MENU UTAMA"): st.query_params.clear(); pindah('Menu'); st.rerun()
     else:
         st.error("QR Code tidak terdaftar."); st.button("Kembali", on_click=lambda: pindah('Menu'))
 
@@ -197,19 +190,19 @@ elif st.session_state.hal == 'Menu':
     st.write("---")
     cl, cr = st.columns(2)
     with cl:
-        if st.button("☀️ HARIAN"): pindah('Harian')
-        if st.button("📅 MINGGUAN"): pindah('Mingguan')
-        if st.button("🏆 BULANAN"): pindah('Bulanan')
+        if st.button("☀️ HARIAN"): pindah('Harian'); st.rerun()
+        if st.button("📅 MINGGUAN"): pindah('Mingguan'); st.rerun()
+        if st.button("🏆 BULANAN"): pindah('Bulanan'); st.rerun()
     with cr:
-        if st.button("⚠️ GANGGUAN"): pindah('Gangguan')
-        if st.button("🔄 UPDATE"): pindah('Update')
-        if st.button("📑 LAPORAN"): pindah('Export')
+        if st.button("⚠️ GANGGUAN"): pindah('Gangguan'); st.rerun()
+        if st.button("🔄 UPDATE"): pindah('Update'); st.rerun()
+        if st.button("📑 LAPORAN"): pindah('Export'); st.rerun()
     
     c_bot1, c_bot2 = st.columns(2)
     with c_bot1:
-        if st.button("📊 STATISTIK"): pindah('Statistik')
+        if st.button("📊 STATISTIK"): pindah('Statistik'); st.rerun()
     with c_bot2:
-        if st.button("🖼️ MASTER QR"): pindah('MasterQR')
+        if st.button("🖼️ MASTER QR"): pindah('MasterQR'); st.rerun()
 
 # C. CHECKLIST
 elif st.session_state.hal in ['Harian', 'Mingguan', 'Bulanan']:
@@ -242,45 +235,69 @@ elif st.session_state.hal in ['Harian', 'Mingguan', 'Bulanan']:
             supabase.table("maintenance_logs").insert({"asset_id": asset_data['id'], "teknisi": tek, "periode": st.session_state.hal, "kondisi": kon, "keterangan": ket_f}).execute()
             st.success("Tersimpan!"); time.sleep(1)
             if is_from_qr: del st.session_state.sel_asset_qr
-            pindah('Menu')
+            pindah('Menu'); st.rerun()
     if st.button("⬅️ BATAL"): 
         if is_from_qr: del st.session_state.sel_asset_qr
-        pindah('Menu')
+        pindah('Menu'); st.rerun()
 
 # D. GANGGUAN
 elif st.session_state.hal == 'Gangguan':
-    if st.button("⬅️ KEMBALI"): pindah('Menu')
+    if st.button("⬅️ KEMBALI"): pindah('Menu'); st.rerun()
     is_from_qr = 'sel_asset_qr' in st.session_state
-    asset_data = st.session_state.sel_asset_qr if is_from_qr else opt_asset[st.selectbox("Pilih Aset", list(opt_asset.keys()))]
-    
+    if is_from_qr:
+        asset_data = st.session_state.sel_asset_qr
+        st.warning(f"Lapor Gangguan: **{asset_data['nama_aset']}**")
+    else:
+        kat_g = st.radio("Filter:", list_kat_master, horizontal=True)
+        list_p_g = list(opt_asset.keys()) if kat_g == "SEMUA" else [k for k, v in opt_asset.items() if str(v.get('kategori')).strip().upper() == kat_g.upper()]
+        sel_a = st.selectbox("Pilih Aset", list_p_g)
+        asset_data = opt_asset[sel_a]
+
     with st.form("f_g"):
         pel = st.selectbox("Teknisi Pelapor", list_tek)
         urg = st.select_slider("Urgensi", ["Rendah", "Sedang", "Tinggi", "Darurat"])
         mas = st.text_area("Masalah")
         foto = st.camera_input("Foto Bukti")
+        
+        # Tambahan: Pratinjau Foto
+        if foto:
+            st.image(foto, caption="Foto Terambil", use_container_width=True)
+            
         if st.form_submit_button("🚨 KIRIM"):
             u = upload_foto(foto)
             supabase.table("gangguan_logs").insert({"asset_id": asset_data['id'], "teknisi": pel, "masalah": mas, "urgensi": urg, "status": "Open", "foto_kerusakan_url": u}).execute()
             st.warning("Terkirim!"); time.sleep(1)
             if is_from_qr: del st.session_state.sel_asset_qr
-            pindah('Menu')
+            pindah('Menu'); st.rerun()
 
 # E. MASTER QR
 elif st.session_state.hal == 'MasterQR':
-    if st.button("⬅️ KEMBALI"): pindah('Menu')
-    sel_aset_name = st.selectbox("Pilih Aset:", list(opt_asset.keys()))
+    if st.button("⬅️ KEMBALI"): pindah('Menu'); st.rerun()
+    st.subheader("🖼️ Master QR Generator")
+    sel_aset_name = st.selectbox("Pilih Aset untuk QR:", list(opt_asset.keys()))
     asset_data = opt_asset[sel_aset_name]
-    full_url = f"{BASE_URL_APP}?unit={asset_data['kode_qr']}"
-    st.image(f"https://api.qrserver.com/v1/create-qr-code/?size=300x300&data={full_url}")
-    st.code(full_url)
+    kode_qr = asset_data['kode_qr']
+    full_url = f"{BASE_URL_APP}?unit={kode_qr}"
+    qr_api_url = f"https://api.qrserver.com/v1/create-qr-code/?size=300x300&data={full_url}"
+    
+    c1, c2 = st.columns([1, 2])
+    with c1: st.image(qr_api_url, caption=f"QR: {kode_qr}")
+    with c2:
+        st.success(f"**Aset:** {asset_data['nama_aset']}")
+        st.code(full_url)
+        st.info("Klik kanan gambar QR > Save Image As untuk mencetak.")
 
 # F. UPDATE (PERBAIKAN)
 elif st.session_state.hal == 'Update':
-    if st.button("⬅️ KEMBALI"): pindah('Menu')
+    if st.button("⬅️ KEMBALI"): pindah('Menu'); st.rerun()
     logs = supabase.table("gangguan_logs").select("*, assets(nama_aset)").eq("status", "Open").execute().data
     if logs:
         for l in logs:
             with st.expander(f"⚠️ {l['assets']['nama_aset']}"):
+                # Tampilkan foto awal kerusakan
+                if l.get('foto_kerusakan_url'):
+                    st.image(l['foto_kerusakan_url'], caption="Foto Kerusakan Awal", use_container_width=True)
+                
                 with st.form(f"f_up_{l['id']}"):
                     sol = st.text_area("Tindakan")
                     t_pb = st.selectbox("Teknisi", list_tek)
@@ -293,28 +310,41 @@ elif st.session_state.hal == 'Update':
 
 # G. EXPORT
 elif st.session_state.hal == 'Export':
-    if st.button("⬅️ KEMBALI"): pindah('Menu')
+    if st.button("⬅️ KEMBALI"): pindah('Menu'); st.rerun()
+    st.subheader("📑 Ekspor PDF")
     tipe_lap = st.segmented_control("Tipe:", ["Checklist Maintenance", "Log Gangguan & Perbaikan"], default="Checklist Maintenance")
     dr = st.date_input("Rentang", [datetime.date.today() - datetime.timedelta(days=7), datetime.date.today()])
+    p_filter = st.selectbox("Periode:", ["SEMUA", "Harian", "Mingguan", "Bulanan"]) if tipe_lap == "Checklist Maintenance" else "SEMUA"
+
     if len(dr) == 2:
         tbl = "maintenance_logs" if tipe_lap == "Checklist Maintenance" else "gangguan_logs"
         data = supabase.table(tbl).select("*, assets(nama_aset)").order("created_at", desc=True).execute().data
         if data:
-            df = pd.DataFrame(data); df['Nama Aset'] = df['assets'].apply(lambda x: x['nama_aset'] if x else "N/A")
+            df = pd.DataFrame(data)
+            df['Nama Aset'] = df['assets'].apply(lambda x: x['nama_aset'] if x else "N/A")
             df_f = df[(pd.to_datetime(df['created_at']).dt.date >= dr[0]) & (pd.to_datetime(df['created_at']).dt.date <= dr[1])]
-            st.dataframe(df_f, use_container_width=True)
+            
+            if tipe_lap == "Checklist Maintenance":
+                if p_filter != "SEMUA": df_f = df_f[df_f['periode'] == p_filter]
+                kolom_tampil = ['Nama Aset', 'periode', 'teknisi', 'kondisi', 'created_at']
+            else:
+                kolom_tampil = ['Nama Aset', 'masalah', 'teknisi', 'status', 'tindakan_perbaikan']
+
+            st.dataframe(df_f[kolom_tampil], use_container_width=True)
+            
             if not df_f.empty:
                 p, t = st.selectbox("Diketahui:", list_peg), st.selectbox("Dibuat:", list_tek)
                 if st.button("📄 CETAK PDF"):
                     b = generate_pdf_final(df_f, f"{dr[0]} - {dr[1]}", staff_map[p], staff_map[t], "LAPORAN", "Maintenance" if tipe_lap == "Checklist Maintenance" else "Gangguan")
                     if b: st.download_button("Download", b, f"Laporan_{dr[0]}.pdf")
+        else: st.info("Tidak ada data ditemukan.")
 
 # H. STATISTIK
 elif st.session_state.hal == 'Statistik':
-    if st.button("⬅️ KEMBALI"): pindah('Menu')
+    if st.button("⬅️ KEMBALI"): pindah('Menu'); st.rerun()
     raw_g = supabase.table("gangguan_logs").select("*").execute().data
     if raw_g:
         df_g = pd.DataFrame(raw_g)
         c1, c2 = st.columns(2)
-        with c1: st.plotly_chart(px.pie(df_g, names='status', title="Status Gangguan", hole=0.4))
-        with c2: st.plotly_chart(px.bar(df_g, x='urgensi', title="Urgensi"))
+        with c1: st.plotly_chart(px.pie(df_g, names='status', title="Status Laporan Gangguan", hole=0.4))
+        with c2: st.plotly_chart(px.bar(df_g, x='urgensi', title="Tingkat Urgensi Gangguan"))
