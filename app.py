@@ -8,6 +8,7 @@ import plotly.express as px
 import time
 import io
 import requests
+from PIL import Image, ImageDraw
 
 # --- 1. CONFIG & KONEKSI ---
 st.set_page_config(page_title="SIMANTAP ME BI BPP", page_icon="⚡", layout="wide", initial_sidebar_state="collapsed")
@@ -59,7 +60,7 @@ SOW_MASTER = {
     }
 }
 
-# --- 4. CSS CUSTOM & HEADER (KEPANJANGAN FINAL) ---
+# --- 4. CSS CUSTOM & HEADER ---
 st.markdown("""
     <style>
     #MainMenu {visibility: hidden;} footer {visibility: hidden;} header {visibility: hidden;}
@@ -104,11 +105,25 @@ list_kat_master = ["SEMUA", "AC", "AHU", "UPS", "BAS", "PANEL", "GENSET", "UMUM"
 
 def upload_foto(file):
     if file:
-        # Perbaikan: Langsung simpan ke root bucket agar sesuai dengan Public Link yang berfungsi
-        fname = f"{uuid.uuid4()}.jpg"
         try:
-            supabase.storage.from_("foto_maintenance").upload(fname, file.getvalue(), {"content-type":"image/jpeg"})
-            # Return URL absolut yang sudah terbukti bisa dibuka
+            # --- LOGIKA STAMP DENGAN BACKGROUND HITAM ---
+            img = Image.open(file)
+            draw = ImageDraw.Draw(img)
+            waktu_st = datetime.datetime.now().strftime("%d/%m/%Y %H:%M:%S")
+            teks_st = f"SIMANTAP ME | {waktu_st}"
+            
+            w, h = img.size
+            text_x, text_y = w - 320, h - 60
+            # Gambar box hitam sebagai background teks agar kontras
+            draw.rectangle([text_x - 10, text_y - 5, w - 10, h - 10], fill=(0, 0, 0))
+            # Tulis teks putih
+            draw.text((text_x, text_y), teks_st, fill=(255, 255, 255))
+            
+            img_byte_arr = io.BytesIO()
+            img.save(img_byte_arr, format='JPEG', quality=90)
+            
+            fname = f"{uuid.uuid4()}.jpg"
+            supabase.storage.from_("foto_maintenance").upload(fname, img_byte_arr.getvalue(), {"content-type":"image/jpeg"})
             return f"{URL}/storage/v1/object/public/foto_maintenance/{fname}"
         except: return None
     return None
@@ -143,14 +158,12 @@ def generate_pdf_final(df, rentang, peg, tek, judul, tipe="Maintenance"):
         pdf.cell(138, 5, "Known,", 0, 0, "C"); pdf.cell(138, 5, "Dibuat oleh,", 0, 1, "C")
         posisi_peg = str(peg.get('posisi', '')).replace('"', '')
         pdf.cell(138, 5, posisi_peg, 0, 0, "C"); pdf.cell(138, 5, "CV. INDO MEGA JAYA", 0, 1, "C")
-        pdf.ln(20); pdf.set_font("Helvetica", "BU", 10) # Underlined name
+        pdf.ln(20); pdf.set_font("Helvetica", "BU", 10) # Underline
         pdf.cell(138, 5, str(peg.get('nama', '')), 0, 0, "C"); pdf.cell(138, 5, str(tek.get('nama', '')), 0, 1, "C")
         pdf.set_font("Helvetica", "", 10)
         pdf.cell(138, 5, str(peg.get('jabatan_pdf', '')), 0, 0, "C"); pdf.cell(138, 5, "Teknisi ME", 0, 1, "C")
         return pdf.output(dest='S').encode('latin-1')
-    except Exception as e:
-        st.error(f"Gagal generate PDF: {e}")
-        return None
+    except: return None
 
 # --- 6. ROUTING & STATE ---
 if 'hal' not in st.session_state: st.session_state.hal = 'Menu'
@@ -160,9 +173,7 @@ if qr_code_detected and 'qr_handled' not in st.session_state:
 
 def pindah(n): st.session_state.hal = n
 
-# --- 7. HALAMAN-HALAMAN ---
-
-# A. LANDING QR
+# --- 7. HALAMAN ---
 if st.session_state.hal == 'LandingQR':
     asset_qr = qr_map.get(qr_code_detected)
     if asset_qr:
@@ -178,7 +189,6 @@ if st.session_state.hal == 'LandingQR':
     else:
         st.error("QR Code tidak terdaftar."); st.button("Kembali", on_click=lambda: pindah('Menu'))
 
-# B. MENU UTAMA
 elif st.session_state.hal == 'Menu':
     g_open = supabase.table("gangguan_logs").select("id").eq("status", "Open").execute().data
     m_today = supabase.table("maintenance_logs").select("id").filter("created_at", "gte", datetime.date.today().isoformat()).execute().data
@@ -186,7 +196,6 @@ elif st.session_state.hal == 'Menu':
     with c1: st.markdown(f'<div class="stat-card"><small>GANGGUAN</small><br><b style="color:#ef4444; font-size:1.5rem;">{len(g_open)}</b></div>', unsafe_allow_html=True)
     with c2: st.markdown(f'<div class="stat-card"><small>CEK HARI INI</small><br><b style="color:#22c55e; font-size:1.5rem;">{len(m_today)}</b></div>', unsafe_allow_html=True)
     with c3: st.markdown(f'<div class="stat-card"><small>TOTAL ASET</small><br><b style="color:#38bdf8; font-size:1.5rem;">{len(assets_list)}</b></div>', unsafe_allow_html=True)
-    
     st.write("---")
     cl, cr = st.columns(2)
     with cl:
@@ -197,14 +206,12 @@ elif st.session_state.hal == 'Menu':
         if st.button("⚠️ GANGGUAN"): pindah('Gangguan'); st.rerun()
         if st.button("🔄 UPDATE"): pindah('Update'); st.rerun()
         if st.button("📑 LAPORAN"): pindah('Export'); st.rerun()
-    
     c_bot1, c_bot2 = st.columns(2)
     with c_bot1:
         if st.button("📊 STATISTIK"): pindah('Statistik'); st.rerun()
     with c_bot2:
         if st.button("🖼️ MASTER QR"): pindah('MasterQR'); st.rerun()
 
-# C. CHECKLIST
 elif st.session_state.hal in ['Harian', 'Mingguan', 'Bulanan']:
     st.subheader(f"📋 Checklist {st.session_state.hal}")
     is_from_qr = 'sel_asset_qr' in st.session_state
@@ -216,7 +223,6 @@ elif st.session_state.hal in ['Harian', 'Mingguan', 'Bulanan']:
         list_p = list(opt_asset.keys()) if kat_f == "SEMUA" else [k for k, v in opt_asset.items() if str(v.get('kategori')).strip().upper() == kat_f.upper()]
         sel_a = st.selectbox("Pilih Unit:", list_p)
         asset_data = opt_asset[sel_a]
-
     k_key = str(asset_data.get('kategori')).strip().upper() if str(asset_data.get('kategori')).strip().upper() in SOW_MASTER else "UMUM"
     with st.form("f_chk"):
         tek = st.selectbox("Teknisi", list_tek)
@@ -240,7 +246,6 @@ elif st.session_state.hal in ['Harian', 'Mingguan', 'Bulanan']:
         if is_from_qr: del st.session_state.sel_asset_qr
         pindah('Menu'); st.rerun()
 
-# D. GANGGUAN
 elif st.session_state.hal == 'Gangguan':
     if st.button("⬅️ KEMBALI"): pindah('Menu'); st.rerun()
     is_from_qr = 'sel_asset_qr' in st.session_state
@@ -250,88 +255,52 @@ elif st.session_state.hal == 'Gangguan':
     else:
         kat_g = st.radio("Filter:", list_kat_master, horizontal=True)
         list_p_g = list(opt_asset.keys()) if kat_g == "SEMUA" else [k for k, v in opt_asset.items() if str(v.get('kategori')).strip().upper() == kat_g.upper()]
-        sel_a = st.selectbox("Pilih Aset", list_p_g)
-        asset_data = opt_asset[sel_a]
-
+        asset_data = opt_asset[st.selectbox("Pilih Aset", list_p_g)]
     with st.form("f_g"):
-        pel = st.selectbox("Teknisi Pelapor", list_tek)
-        urg = st.select_slider("Urgensi", ["Rendah", "Sedang", "Tinggi", "Darurat"])
-        mas = st.text_area("Masalah")
-        foto = st.camera_input("Foto Bukti")
-        
-        # Tambahan: Pratinjau Foto
-        if foto:
-            st.image(foto, caption="Foto Terambil", use_container_width=True)
-            
+        pel = st.selectbox("Teknisi Pelapor", list_tek); urg = st.select_slider("Urgensi", ["Rendah", "Sedang", "Tinggi", "Darurat"])
+        mas = st.text_area("Masalah"); foto = st.camera_input("Foto Bukti")
+        if foto: st.image(foto, caption="Foto Terambil", use_container_width=True)
         if st.form_submit_button("🚨 KIRIM"):
             u = upload_foto(foto)
             supabase.table("gangguan_logs").insert({"asset_id": asset_data['id'], "teknisi": pel, "masalah": mas, "urgensi": urg, "status": "Open", "foto_kerusakan_url": u}).execute()
-            st.warning("Terkirim!"); time.sleep(1)
-            if is_from_qr: del st.session_state.sel_asset_qr
-            pindah('Menu'); st.rerun()
+            st.warning("Terkirim!"); time.sleep(1); if is_from_qr: del st.session_state.sel_asset_qr; pindah('Menu'); st.rerun()
 
-# E. MASTER QR
 elif st.session_state.hal == 'MasterQR':
     if st.button("⬅️ KEMBALI"): pindah('Menu'); st.rerun()
-    st.subheader("🖼️ Master QR Generator")
-    sel_aset_name = st.selectbox("Pilih Aset untuk QR:", list(opt_asset.keys()))
-    asset_data = opt_asset[sel_aset_name]
-    kode_qr = asset_data['kode_qr']
-    full_url = f"{BASE_URL_APP}?unit={kode_qr}"
-    qr_api_url = f"https://api.qrserver.com/v1/create-qr-code/?size=300x300&data={full_url}"
-    
+    asset_data = opt_asset[st.selectbox("Pilih Aset untuk QR:", list(opt_asset.keys()))]
+    full_url = f"{BASE_URL_APP}?unit={asset_data['kode_qr']}"
     c1, c2 = st.columns([1, 2])
-    with c1: st.image(qr_api_url, caption=f"QR: {kode_qr}")
-    with c2:
-        st.success(f"**Aset:** {asset_data['nama_aset']}")
-        st.code(full_url)
-        st.info("Klik kanan gambar QR > Save Image As untuk mencetak.")
+    with c1: st.image(f"https://api.qrserver.com/v1/create-qr-code/?size=300x300&data={full_url}")
+    with c2: st.success(f"**Aset:** {asset_data['nama_aset']}"); st.code(full_url)
 
-# F. UPDATE (PERBAIKAN)
 elif st.session_state.hal == 'Update':
     if st.button("⬅️ KEMBALI"): pindah('Menu'); st.rerun()
     logs = supabase.table("gangguan_logs").select("*, assets(nama_aset)").eq("status", "Open").execute().data
     if logs:
         for l in logs:
             with st.expander(f"⚠️ {l['assets']['nama_aset']}"):
-                # Tampilkan foto awal kerusakan
-                if l.get('foto_kerusakan_url'):
-                    st.image(l['foto_kerusakan_url'], caption="Foto Kerusakan Awal", use_container_width=True)
-                
+                if l.get('foto_kerusakan_url'): st.image(l['foto_kerusakan_url'], caption="Foto Kerusakan Awal")
                 with st.form(f"f_up_{l['id']}"):
-                    sol = st.text_area("Tindakan")
-                    t_pb = st.selectbox("Teknisi", list_tek)
-                    f_up = st.camera_input("Foto Selesai")
+                    sol = st.text_area("Tindakan"); t_pb = st.selectbox("Teknisi", list_tek); f_up = st.camera_input("Foto Selesai")
                     if st.form_submit_button("Selesai"):
                         u_f = upload_foto(f_up)
                         supabase.table("gangguan_logs").update({"status":"Closed", "tindakan_perbaikan":sol, "teknisi_perbaikan":t_pb, "tgl_perbaikan":datetime.datetime.now().isoformat(), "foto_setelah_perbaikan_url":u_f}).eq("id", l['id']).execute()
                         st.success("Berhasil!"); time.sleep(1); st.rerun()
     else: st.info("Tidak ada perbaikan tertunda.")
 
-# G. EXPORT
 elif st.session_state.hal == 'Export':
     if st.button("⬅️ KEMBALI"): pindah('Menu'); st.rerun()
-    st.subheader("📑 Ekspor PDF")
     tipe_lap = st.segmented_control("Tipe:", ["Checklist Maintenance", "Log Gangguan & Perbaikan"], default="Checklist Maintenance")
     dr = st.date_input("Rentang", [datetime.date.today() - datetime.timedelta(days=7), datetime.date.today()])
     p_filter = st.selectbox("Periode:", ["SEMUA", "Harian", "Mingguan", "Bulanan"]) if tipe_lap == "Checklist Maintenance" else "SEMUA"
-
     if len(dr) == 2:
         tbl = "maintenance_logs" if tipe_lap == "Checklist Maintenance" else "gangguan_logs"
         data = supabase.table(tbl).select("*, assets(nama_aset)").order("created_at", desc=True).execute().data
         if data:
-            df = pd.DataFrame(data)
-            df['Nama Aset'] = df['assets'].apply(lambda x: x['nama_aset'] if x else "N/A")
+            df = pd.DataFrame(data); df['Nama Aset'] = df['assets'].apply(lambda x: x['nama_aset'] if x else "N/A")
             df_f = df[(pd.to_datetime(df['created_at']).dt.date >= dr[0]) & (pd.to_datetime(df['created_at']).dt.date <= dr[1])]
-            
-            if tipe_lap == "Checklist Maintenance":
-                if p_filter != "SEMUA": df_f = df_f[df_f['periode'] == p_filter]
-                kolom_tampil = ['Nama Aset', 'periode', 'teknisi', 'kondisi', 'created_at']
-            else:
-                kolom_tampil = ['Nama Aset', 'masalah', 'teknisi', 'status', 'tindakan_perbaikan']
-
-            st.dataframe(df_f[kolom_tampil], use_container_width=True)
-            
+            if tipe_lap == "Checklist Maintenance" and p_filter != "SEMUA": df_f = df_f[df_f['periode'] == p_filter]
+            st.dataframe(df_f, use_container_width=True)
             if not df_f.empty:
                 p, t = st.selectbox("Diketahui:", list_peg), st.selectbox("Dibuat:", list_tek)
                 if st.button("📄 CETAK PDF"):
@@ -339,7 +308,6 @@ elif st.session_state.hal == 'Export':
                     if b: st.download_button("Download", b, f"Laporan_{dr[0]}.pdf")
         else: st.info("Tidak ada data ditemukan.")
 
-# H. STATISTIK
 elif st.session_state.hal == 'Statistik':
     if st.button("⬅️ KEMBALI"): pindah('Menu'); st.rerun()
     raw_g = supabase.table("gangguan_logs").select("*").execute().data
